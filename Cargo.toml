@@ -1,0 +1,22 @@
+[package]
+edition = "2021"
+name = "seyda_neen"
+version = "0.0.0"
+publish = false
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "z"
+panic = "abort"
+strip = true
+
+[dependencies]
+components-arena = "3.3.3"
+macro-attr-2018 = "2.1.2"
+panicking = "0.2.0"
+tuifw-screen = "0.12.3"
+tuifw-window = "0.12.3"
