@@ -16,6 +16,7 @@ strip = true
 
 [dependencies]
 components-arena = "3.3.3"
+educe = "0.4.19"
 macro-attr-2018 = "2.1.2"
 panicking = "0.2.0"
 tuifw-screen = "0.12.3"

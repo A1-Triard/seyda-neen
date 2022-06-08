@@ -4,18 +4,29 @@
 #![windows_subsystem="console"]
 
 use components_arena::{Arena, Component, Id};
+use educe::Educe;
 use macro_attr_2018::macro_attr;
 use std::cmp::{max, min};
+use std::num::NonZeroU8;
 use tuifw_screen::{self, HAlign, VAlign, Attr, Color, Event};
 use tuifw_screen::{Key, Point, Range1d, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
 
 const BG: Option<Color> = Some(Color::Black);
 
+#[derive(Debug)]
+struct Building {
+    w: NonZeroU8,
+    h: NonZeroU8,
+    door: u16,
+}
+
+#[derive(Debug)]
 struct Game {
     windows: Arena<GameWindow>,
     player: Point,
     visibility: u16,
+    buildings: Vec<(Point, Building)>,
 }
 
 type WindowRender = fn(
@@ -26,9 +37,11 @@ type WindowRender = fn(
 );
 
 macro_attr! {
-    #[derive(Component!)]
+    #[derive(Educe, Component!)]
+    #[educe(Debug)]
     struct GameWindow {
         window: Window,
+        #[educe(Debug(ignore))]
         render: WindowRender,
     }
 }
@@ -91,6 +104,55 @@ fn render_map(
             }
         }
     }
+    for &(tl, ref building) in &game.buildings {
+        let size = Vector {
+            x: (2 * building.w.get() as u16 - 1) as i16,
+            y: building.h.get() as u16 as i16
+        };
+        let door = building.door % (2 * (building.h.get() as u16 + building.w.get() as u16));
+        let (door_offset, door_str) = match door {
+            door if door < building.h.get() as u16 => (Vector {
+                x: 0,
+                y: door as i16
+            }, "|"),
+            door if door < building.h.get() as u16 + building.w.get() as u16 => (Vector {
+                x: ((2 * (door - building.h.get() as u16)) as i16).wrapping_sub(1),
+                y: size.y - 1
+            }, " ─ "),
+            door if door < 2 * building.h.get() as u16 + building.w.get() as u16 => (Vector {
+                x: size.x - 1, 
+                y: size.y - 1 - (2 * (door - building.h.get() as u16 - building.w.get() as u16)) as i16
+            }, "|"),
+            door => (Vector {
+                x: (
+                    size.x - 1 - (2 * (door - 2 * building.h.get() as u16 - building.w.get() as u16)) as i16
+                ).wrapping_sub(1),
+                y: 0
+            }, " ─ "),
+        };
+        let bounds = Rect { tl, size };
+        let bounds = bounds.relative_to(game.player).absolute_with(player_bounds.tl);
+        let border_thickness = Thickness::all(1);
+        let inner_bounds = border_thickness.shrink_rect(bounds);
+        for x in Range1d::new(inner_bounds.l(), inner_bounds.r()) {
+            for y in Range1d::new(inner_bounds.t(), inner_bounds.b()) {
+                port.out(Point { x, y }, Color::White, BG, Attr::empty(), " ");
+            }
+        }
+        for x in Range1d::new(inner_bounds.l(), inner_bounds.r()) {
+            port.out(Point { x, y: bounds.t() }, Color::White, BG, Attr::empty(), "─");
+            port.out(Point { x, y: bounds.b_inner() }, Color::White, BG, Attr::empty(), "─");
+        }
+        for y in Range1d::new(inner_bounds.t(), inner_bounds.b()) {
+            port.out(Point { x: bounds.l(), y }, Color::White, BG, Attr::empty(), "│");
+            port.out(Point { x: bounds.r_inner(), y }, Color::White, BG, Attr::empty(), "│");
+        }
+        port.out(bounds.tl, Color::White, BG, Attr::empty(), "┌");
+        port.out(bounds.tr_inner(), Color::White, BG, Attr::empty(), "┐");
+        port.out(bounds.bl_inner(), Color::White, BG, Attr::empty(), "└");
+        port.out(bounds.br_inner(), Color::White, BG, Attr::empty(), "┘");
+        port.out(bounds.tl.offset(door_offset), Color::Green, BG, Attr::empty(), door_str);
+    }
     port.out(player_bounds.tl, Color::Blue, BG, Attr::empty(), "@");
 }
 
@@ -103,6 +165,24 @@ fn map_bounds(game: &Game, screen_size: Vector) -> Rect {
     margin.shrink_rect(Rect { tl: Point { x: 0, y: 0 }, size: screen_size })
 }
 
+macro_rules! nz {
+    (
+        0
+    ) => {
+        compile_error!("zero");
+    };
+    (
+        0u8
+    ) => {
+        compile_error!("zero");
+    };
+    (
+        $v:literal
+    ) => {
+        (unsafe { NonZeroU8::new_unchecked($v) })
+    };
+}
+
 fn main() {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut windows = WindowTree::new(screen, render);
@@ -110,14 +190,23 @@ fn main() {
         windows: Arena::new(),
         player: Point { x: 0, y: 0 },
         visibility: 10,
+        buildings: vec![
+            (Point { x: 6, y: 3 }, Building { w: nz!(5), h: nz!(4), door: 16 })
+        ],
     };
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
-    let _map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
+    let map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
     loop {
         let event = WindowTree::update(&mut windows, true, &mut game).unwrap().unwrap();
-        match event {
+        let step = match event {
             Event::Key(_, Key::Escape) => break,
-            _ => { },
-        }
+            Event::Key(n, Key::Right) => Vector { x: (n.get() as i16).wrapping_mul(2), y: 0 },
+            Event::Key(n, Key::Left) => Vector { x: (n.get() as i16).wrapping_mul(2).wrapping_neg(), y: 0 },
+            Event::Key(n, Key::Up) => Vector { y: (n.get() as i16).wrapping_neg(), x: 0 },
+            Event::Key(n, Key::Down) => Vector { y: n.get() as i16, x: 0 },
+            _ => Vector { x: 0, y: 0 },
+        };
+        game.player = game.player.offset(step);
+        game.windows[map].window.invalidate(&mut windows);
     }
 }

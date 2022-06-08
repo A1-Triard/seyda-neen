@@ -229,6 +229,7 @@ name = "seyda_neen"
 version = "0.0.0"
 dependencies = [
  "components-arena",
+ "educe",
  "macro-attr-2018",
  "panicking",
  "tuifw-screen",
