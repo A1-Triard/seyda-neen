@@ -5,6 +5,7 @@
 
 use components_arena::{Arena, Component, Id};
 use macro_attr_2018::macro_attr;
+use std::cmp::{max, min};
 use tuifw_screen::{self, HAlign, VAlign, Attr, Color, Event};
 use tuifw_screen::{Key, Point, Range1d, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
@@ -56,6 +57,17 @@ fn render(
     }
 }
 
+fn neg_abs(n: i16) -> i16 {
+    n.checked_abs().map_or(i16::MIN, |a| -a)
+}
+
+fn norm_x_2(v: Vector) -> u32 {
+    assert_eq!(v.x % 2, 0);
+    let min_c = 0u16.wrapping_sub(max(neg_abs(v.x) / 2, neg_abs(v.y)) as u16) as u32;
+    let max_c = 0u16.wrapping_sub(min(neg_abs(v.x) / 2, neg_abs(v.y)) as u16) as u32;
+    2 * (max_c - min_c) + 3 * min_c
+}
+
 fn render_map(
     tree: &WindowTree<Game>,
     window: Id<GameWindow>,
@@ -74,7 +86,9 @@ fn render_map(
     let map_bounds = map_padding.expand_rect(player_bounds);
     for x in Range1d::new(map_bounds.l(), map_bounds.r()).step_by(2) {
         for y in Range1d::new(map_bounds.t(), map_bounds.b()) {
-            port.out(Point { x, y }, Color::White, BG, Attr::empty(), "·");
+            if norm_x_2(player_bounds.tl.offset_from(Point { x, y })) + 1 <= 2 * game.visibility as u32 {
+                port.out(Point { x, y }, Color::White, BG, Attr::empty(), "·");
+            }
         }
     }
     port.out(player_bounds.tl, Color::Blue, BG, Attr::empty(), "@");
@@ -95,7 +109,7 @@ fn main() {
     let mut game = Game {
         windows: Arena::new(),
         player: Point { x: 0, y: 0 },
-        visibility: 15,
+        visibility: 10,
     };
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
     let _map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
