@@ -79,6 +79,10 @@ impl Building {
         } }
     }
 
+    fn door(&self) -> Point {
+        self.tl.offset(self.door_offset())
+    }
+
     fn door_offset(&self) -> Vector {
         if self.door < self.h.get() as u16 {
             Vector {
@@ -205,7 +209,7 @@ impl World {
                         rect.l_line().contains(p) || rect.t_line().contains(p) ||
                         rect.r_line().contains(p) || rect.b_line().contains(p)
                     {
-                        let door = self.buildings[building].door_offset() == p.offset_from(area.bounds().tl);
+                        let door = self.buildings[building].door() == p;
                         area[p] = if door { Cell::Door } else { Cell::Wall };
                     }
                 }

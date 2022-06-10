@@ -117,23 +117,31 @@ fn render_map(
                 let l = visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
                 let u = visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
                 let is_wall = |cell| cell == Cell::Wall || cell == Cell::Door;
-                let ch = match (is_wall(l), is_wall(u), is_wall(r), is_wall(d)) {
-                    (false, false, false, false) => "│",
-                    (false, false, false, true) => "┬",
-                    (false, false, true, false) => "──",
-                    (false, false, true, true) => "┌─",
-                    (false, true, false, false) => "┴",
-                    (false, true, false, true) => "│",
-                    (false, true, true, false) => "└─",
-                    (false, true, true, true) => "├─",
-                    (true, false, false, false) => "─",
-                    (true, false, false, true) => "┐",
-                    (true, false, true, false) => "──",
-                    (true, false, true, true) => "┬─",
-                    (true, true, false, false) => "┘",
-                    (true, true, false, true) => "┤",
-                    (true, true, true, false) => "┴─",
-                    (true, true, true, true) => "┼─",
+                let ch = match (is_wall(l), is_wall(u), is_wall(r), is_wall(d), r == Cell::Door) {
+                    (false, false, false, false, _) => "│",
+                    (false, false, false, true, _) => "┬",
+                    (false, false, true, false, true) => "─",
+                    (false, false, true, false, false) => "──",
+                    (false, false, true, true, true) => "┌",
+                    (false, false, true, true, false) => "┌─",
+                    (false, true, false, false, _) => "┴",
+                    (false, true, false, true, _) => "│",
+                    (false, true, true, false, true) => "└",
+                    (false, true, true, false, false) => "└─",
+                    (false, true, true, true, true) => "├",
+                    (false, true, true, true, false) => "├─",
+                    (true, false, false, false, _) => "─",
+                    (true, false, false, true, _) => "┐",
+                    (true, false, true, false, true) => "─",
+                    (true, false, true, false, false) => "──",
+                    (true, false, true, true, true) => "┬",
+                    (true, false, true, true, false) => "┬─",
+                    (true, true, false, false, _) => "┘",
+                    (true, true, false, true, _) => "┤",
+                    (true, true, true, false, true) => "┴",
+                    (true, true, true, false, false) => "┴─",
+                    (true, true, true, true, true) => "┼",
+                    (true, true, true, true, false) => "┼─",
                 };
                 (Color::White, Attr::empty(), ch)
             },
@@ -175,7 +183,7 @@ macro_rules! nz {
 fn main() {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut world = World::new();
-    world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 8);
+    world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 16);
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
