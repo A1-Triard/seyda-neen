@@ -115,11 +115,20 @@ impl Building {
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-pub enum Cell {
+pub enum Wall {
     None,
     Door,
-    Player,
     Wall,
+}
+
+impl Wall {
+    pub fn is_none(self) -> bool { self == Wall::None }
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub struct Cell {
+    pub wall: Wall,
+    pub player: bool,
 }
 
 #[derive(Debug)]
@@ -153,7 +162,7 @@ impl World {
     }
 
     pub fn move_player(&mut self, p: Point) {
-        if self.cell(p) != Cell::Wall {
+        if self.wall(p) != Wall::Wall {
             self.player = p;
         }
     }
@@ -202,7 +211,7 @@ impl World {
         }
     }
 
-    fn cell(&self, p: Point) -> Cell {
+    fn wall(&self, p: Point) -> Wall {
         if let Some((_, sector_buildings)) = self.sector(p) {
             for &building in sector_buildings {
                 let rect = self.buildings[building].rect();
@@ -211,21 +220,21 @@ impl World {
                     rect.r_line().contains(p) || rect.b_line().contains(p)
                 {
                     let door = self.buildings[building].door() == p;
-                    return if door { Cell::Door } else { Cell::Wall };
+                    return if door { Wall::Door } else { Wall::Wall };
                 }
             }
-            Cell::None
+            Wall::None
         } else {
-            Cell::None
+            Wall::None
         }
     }
 
     pub fn render(&self, area: &mut VisibleArea) {
         for p in area.bounds().points() {
-            area[p] = self.cell(p);
+            area[p].wall = self.wall(p);
         }
         if area.bounds().contains(self.player) {
-            area[self.player] = Cell::Player;
+            area[self.player].player = true;
         }
     }
 }
@@ -243,7 +252,7 @@ impl VisibleArea {
 
     pub fn new(center: Point, visibility: i8) -> Self {
         let size = Self::size(visibility);
-        let cells = vec![Cell::None; size as usize * size as usize];
+        let cells = vec![Cell { wall: Wall::None, player: false }; size as usize * size as usize];
         let size = Vector { x: size as u16 as i16, y: size as u16 as i16 };
         let center_margin = Thickness::align(Vector { x: 1, y: 1 }, size, HAlign::Center, VAlign::Center);
         let bounds = center_margin.expand_rect(Rect { tl: center, size: Vector { x: 1, y: 1 } });

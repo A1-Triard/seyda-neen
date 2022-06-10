@@ -93,15 +93,15 @@ fn render_map(
         if norm_x_2(v) + 1 > 2 * game.visibility as u32 { continue; }
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match visible_area[p] {
-            Cell::None => (Color::White, Attr::empty(), "·"),
-            Cell::Player => (Color::Blue, Attr::empty(), "@"),
-            Cell::Door => {
+            Cell { player: true, .. } => (Color::Blue, Attr::empty(), "@"),
+            Cell { wall: Wall::None, .. } => (Color::White, Attr::empty(), "·"),
+            Cell { wall: Wall::Door, .. } => {
                 let horizontal = {
-                    let h1 = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }] == Cell::Wall;
+                    let h1 = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall == Wall::Wall;
                     if !h1 {
-                        let v1 = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }] == Cell::Wall;
+                        let v1 = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall == Wall::Wall;
                         if !v1 {
-                            visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }] == Cell::Wall
+                            visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall == Wall::Wall
                         } else {
                             false
                         }
@@ -111,42 +111,36 @@ fn render_map(
                 };
                 (Color::Green, Attr::empty(), if horizontal { "─" } else { "|" })
             },
-            Cell::Wall => {
-                let r = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let d = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-                let l = visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-                let u = visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
-                let is_wall = |cell| cell == Cell::Wall || cell == Cell::Door;
-                let is_door_r = match r {
-                    Cell::Wall => Some(false),
-                    Cell::Door => Some(true),
-                    _ => None,
-                };
-                let ch = match (is_wall(l), is_wall(u), is_door_r, is_wall(d)) {
-                    (false, false, None, false) => "│",
-                    (false, false, None, true) => "┬",
-                    (false, false, Some(true), false) => "─",
-                    (false, false, Some(false), false) => "──",
-                    (false, false, Some(true), true) => "┌",
-                    (false, false, Some(false), true) => "┌─",
-                    (false, true, None, false) => "┴",
-                    (false, true, None, true) => "│",
-                    (false, true, Some(true), false) => "└",
-                    (false, true, Some(false), false) => "└─",
-                    (false, true, Some(true), true) => "├",
-                    (false, true, Some(false), true) => "├─",
-                    (true, false, None, false) => "─",
-                    (true, false, None, true) => "┐",
-                    (true, false, Some(true), false) => "─",
-                    (true, false, Some(false), false) => "──",
-                    (true, false, Some(true), true) => "┬",
-                    (true, false, Some(false), true) => "┬─",
-                    (true, true, None, false) => "┘",
-                    (true, true, None, true) => "┤",
-                    (true, true, Some(true), false) => "┴",
-                    (true, true, Some(false), false) => "┴─",
-                    (true, true, Some(true), true) => "┼",
-                    (true, true, Some(false), true) => "┼─",
+            Cell { wall: Wall::Wall, .. } => {
+                let r = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
+                let d = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall;
+                let l = visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall;
+                let u = visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }].wall;
+                let ch = match (!l.is_none(), !u.is_none(), r, !d.is_none()) {
+                    (false, false, Wall::None, false) => "│",
+                    (false, false, Wall::None, true) => "┬",
+                    (false, false, Wall::Door, false) => "─",
+                    (false, false, Wall::Wall, false) => "──",
+                    (false, false, Wall::Door, true) => "┌",
+                    (false, false, Wall::Wall, true) => "┌─",
+                    (false, true, Wall::None, false) => "┴",
+                    (false, true, Wall::None, true) => "│",
+                    (false, true, Wall::Door, false) => "└",
+                    (false, true, Wall::Wall, false) => "└─",
+                    (false, true, Wall::Door, true) => "├",
+                    (false, true, Wall::Wall, true) => "├─",
+                    (true, false, Wall::None, false) => "─",
+                    (true, false, Wall::None, true) => "┐",
+                    (true, false, Wall::Door, false) => "─",
+                    (true, false, Wall::Wall, false) => "──",
+                    (true, false, Wall::Door, true) => "┬",
+                    (true, false, Wall::Wall, true) => "┬─",
+                    (true, true, Wall::None, false) => "┘",
+                    (true, true, Wall::None, true) => "┤",
+                    (true, true, Wall::Door, false) => "┴",
+                    (true, true, Wall::Wall, false) => "┴─",
+                    (true, true, Wall::Door, true) => "┼",
+                    (true, true, Wall::Wall, true) => "┼─",
                 };
                 (Color::White, Attr::empty(), ch)
             },
