@@ -153,7 +153,9 @@ impl World {
     }
 
     pub fn move_player(&mut self, p: Point) {
-        self.player = p;
+        if self.cell(p) != Cell::Wall {
+            self.player = p;
+        }
     }
 
     fn sector(&self, p: Point) -> Option<(Id<Sector>, &Vec<Id<Building>>)> {
@@ -200,20 +202,27 @@ impl World {
         }
     }
 
-    pub fn render(&self, area: &mut VisibleArea) {
-        for p in area.bounds().points() {
-            if let Some((_, sector_buildings)) = self.sector(p) {
-                for &building in sector_buildings {
-                    let rect = self.buildings[building].rect();
-                    if
-                        rect.l_line().contains(p) || rect.t_line().contains(p) ||
-                        rect.r_line().contains(p) || rect.b_line().contains(p)
-                    {
-                        let door = self.buildings[building].door() == p;
-                        area[p] = if door { Cell::Door } else { Cell::Wall };
-                    }
+    fn cell(&self, p: Point) -> Cell {
+        if let Some((_, sector_buildings)) = self.sector(p) {
+            for &building in sector_buildings {
+                let rect = self.buildings[building].rect();
+                if
+                    rect.l_line().contains(p) || rect.t_line().contains(p) ||
+                    rect.r_line().contains(p) || rect.b_line().contains(p)
+                {
+                    let door = self.buildings[building].door() == p;
+                    return if door { Cell::Door } else { Cell::Wall };
                 }
             }
+            Cell::None
+        } else {
+            Cell::None
+        }
+    }
+
+    pub fn render(&self, area: &mut VisibleArea) {
+        for p in area.bounds().points() {
+            area[p] = self.cell(p);
         }
         if area.bounds().contains(self.player) {
             area[self.player] = Cell::Player;
