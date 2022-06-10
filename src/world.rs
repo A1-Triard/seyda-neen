@@ -144,7 +144,7 @@ impl World {
         let mut sectors = Arena::new();
         let area = sectors.insert(|id| (Sector {
             rect: Rect {
-                tl: Point { x: i16::MIN, y: i16::MIN },
+                tl: Point { x: -i16::MAX, y: -i16::MAX },
                 size: Vector { x: -1, y: -1 }
             },
             data: Right(Vec::new())
