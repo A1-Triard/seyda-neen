@@ -120,6 +120,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
+name = "libc_alloc"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db1d62455a2746a7f4a67a62d77f969954cd7d3bca46e4d037acd097ba79dab4"
+
+[[package]]
 name = "macro-attr-2018"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -231,6 +237,8 @@ dependencies = [
  "components-arena",
  "educe",
  "either",
+ "libc",
+ "libc_alloc",
  "macro-attr-2018",
  "panicking",
  "tuifw-screen",

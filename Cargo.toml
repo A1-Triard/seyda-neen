@@ -4,6 +4,10 @@ name = "seyda_neen"
 version = "0.0.0"
 publish = false
 
+[features]
+default = ["debug"]
+debug = ["panicking/std"]
+
 [profile.release]
 codegen-units = 1
 lto = true
@@ -14,8 +18,10 @@ strip = true
 [dependencies]
 components-arena = "3.3.3"
 educe = "0.4.19"
-either = "1.6.1"
+either = { version = "1.6.1", default-features = false }
+libc = { version = "0.2.126", default-features = false }
+libc_alloc = "1.0.3"
 macro-attr-2018 = "2.1.2"
-panicking = "0.2.0"
+panicking = { version = "0.2.0", default-features = false }
 tuifw-screen = "0.13.0"
 tuifw-window = "0.13.0"

@@ -1,16 +1,30 @@
 #![deny(warnings)]
-#![allow(dead_code)]
 
+#![feature(default_alloc_error_handler)]
+#![feature(lang_items)]
+#![feature(start)]
 #![windows_subsystem="console"]
+#![no_std]
+
+extern crate alloc;
+
+#[global_allocator]
+static ALLOCATOR: libc_alloc::LibcAlloc = libc_alloc::LibcAlloc;
+
+#[cfg(not(feature="debug"))]
+#[panic_handler]
+fn panic(_panic: &core::panic::PanicInfo<'_>) -> ! {
+    unsafe { libc::exit(b'P' as _) }
+}
 
 mod world;
 use world::*;
 
 use components_arena::{Arena, Component, Id};
+use core::cmp::{max, min};
+use core::num::NonZeroU8;
 use educe::Educe;
 use macro_attr_2018::macro_attr;
-use std::cmp::{max, min};
-use std::num::NonZeroU8;
 use tuifw_screen::{self, HAlign, VAlign, Attr, Color, Event};
 use tuifw_screen::{Key, Point, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
@@ -179,7 +193,8 @@ macro_rules! nz {
     };
 }
 
-fn main() {
+#[start]
+fn main(_: isize, _: *const *const u8) -> isize {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut world = World::new();
     world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 16);
@@ -204,4 +219,5 @@ fn main() {
         game.world.move_player(game.world.player().offset(step));
         game.windows[map].window.invalidate(&mut windows);
     }
+    0
 }

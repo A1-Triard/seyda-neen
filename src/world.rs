@@ -1,10 +1,12 @@
+use alloc::vec;
+use alloc::vec::Vec;
 use components_arena::{Arena, Component, Id};
+use core::cmp::max;
+use core::mem::replace;
+use core::num::NonZeroU8;
+use core::ops::{Index, IndexMut};
 use either::{Either, Left, Right};
 use macro_attr_2018::macro_attr;
-use std::cmp::max;
-use std::mem::replace;
-use std::num::NonZeroU8;
-use std::ops::{Index, IndexMut};
 use tuifw_screen::{HAlign, VAlign, Point, Rect, Thickness, Vector};
 
 const BUILDINGS_PER_SECTOR_MAX: usize = 16;
