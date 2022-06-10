@@ -4,9 +4,6 @@ name = "seyda_neen"
 version = "0.0.0"
 publish = false
 
-[profile.dev]
-panic = "abort"
-
 [profile.release]
 codegen-units = 1
 lto = true
@@ -17,7 +14,8 @@ strip = true
 [dependencies]
 components-arena = "3.3.3"
 educe = "0.4.19"
+either = "1.6.1"
 macro-attr-2018 = "2.1.2"
 panicking = "0.2.0"
-tuifw-screen = "0.12.3"
-tuifw-window = "0.12.3"
+tuifw-screen = "0.13.0"
+tuifw-window = "0.13.0"
