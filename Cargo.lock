@@ -257,25 +257,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "tinyvec"
-version = "1.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
-dependencies = [
- "tinyvec_macros",
-]
-
-[[package]]
-name = "tinyvec_macros"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cda74da7e1a664f795bb1f8a87ec406fb89a02522cf6e50620d016add6dbbf5c"
-
-[[package]]
 name = "tuifw-screen"
-version = "0.13.0"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af2882b7125487420a200ab043621e49081311d05d176db0375d5ada77204306"
+checksum = "1b5e367855120dfc954e8a3d289f82b48e4017a94a03fea8236c235409970e80"
 dependencies = [
  "errno-no-std",
  "tuifw-screen-base",
@@ -285,9 +270,9 @@ dependencies = [
 
 [[package]]
 name = "tuifw-screen-base"
-version = "0.13.0"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d749daf10a7604207c9c9bed2b42a74324361dc0e91cc4f6b18d682f116d7869"
+checksum = "bd48797656f7d2c4fb681fcf3043ee5a023d4a86031a1a2eed638740c3afad48"
 dependencies = [
  "bitflags",
  "either",
@@ -299,9 +284,9 @@ dependencies = [
 
 [[package]]
 name = "tuifw-screen-ncurses"
-version = "0.13.2"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc5b3317cc2ce81c9be6077b78202a768f16f353254cfbf0cfca98442e767055"
+checksum = "29b3b1ec9e36fcf7766cc7e0775d0049c3f3ab67cc4e7457bb5e93861d03a274"
 dependencies = [
  "cc",
  "either",
@@ -310,31 +295,28 @@ dependencies = [
  "panicking",
  "pkg-config",
  "tuifw-screen-base",
- "unicode-normalization",
- "unicode-segmentation",
  "unicode-width",
 ]
 
 [[package]]
 name = "tuifw-screen-winapi"
-version = "0.13.0"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db97fa6aa81c39e072bfb63854a517aabbf095bb926802d0aa83dc5ec7b249d1"
+checksum = "9c34c3be209100eb9987dba74565ae4da67ce8c0c7eda4b0b10a5309ebc02866"
 dependencies = [
  "either",
  "errno-no-std",
  "num-traits",
  "panicking",
  "tuifw-screen-base",
- "unicode-segmentation",
  "winapi",
 ]
 
 [[package]]
 name = "tuifw-window"
-version = "0.13.0"
+version = "0.13.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acb5596ca4db7c9c57b5b2dc1202cb14755bf055e21dc303fcdb1e1a6880eccf"
+checksum = "63ebc6ae78272ed76efa3a1ccb8a4778f3f1d4d24f4ccbe70bc84811dfa06a1b"
 dependencies = [
  "components-arena",
  "educe",
@@ -348,21 +330,6 @@ name = "unicode-ident"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d22af068fba1eb5edcb4aea19d382b2a3deb4c8f9d475c589b6ada9e0fd493ee"
-
-[[package]]
-name = "unicode-normalization"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d54590932941a9e9266f0832deed84ebe1bf2e4c9e4a3554d393d18f5e854bf9"
-dependencies = [
- "tinyvec",
-]
-
-[[package]]
-name = "unicode-segmentation"
-version = "1.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e8820f5d777f6224dc4be3632222971ac30164d4a258d595640799554ebfd99"
 
 [[package]]
 name = "unicode-width"
