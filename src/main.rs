@@ -1,20 +1,27 @@
 #![deny(warnings)]
 
 #![feature(default_alloc_error_handler)]
+#![feature(extern_types)]
 #![feature(lang_items)]
 #![feature(start)]
 #![windows_subsystem="console"]
 #![no_std]
+#![cfg_attr(windows, no_main)]
 
 extern crate alloc;
 
+#[cfg(windows)]
+extern crate rlibc;
+
+use composable_allocators::{AsGlobal, System};
+
 #[global_allocator]
-static ALLOCATOR: libc_alloc::LibcAlloc = libc_alloc::LibcAlloc;
+static ALLOCATOR: AsGlobal<System> = AsGlobal(System);
 
 #[cfg(not(feature="debug"))]
 #[panic_handler]
-fn panic(_panic: &core::panic::PanicInfo<'_>) -> ! {
-    unsafe { libc::exit(b'P' as _) }
+fn panic(_panic: &core::panic::PanicInfo) -> ! {
+    exit_no_std::exit(b'P')
 }
 
 mod world;
@@ -193,8 +200,7 @@ macro_rules! nz {
     };
 }
 
-#[start]
-fn main(_: isize, _: *const *const u8) -> isize {
+fn start() -> u8 {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut world = World::new();
     world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 16);
@@ -221,3 +227,22 @@ fn main(_: isize, _: *const *const u8) -> isize {
     }
     0
 }
+
+#[cfg(not(windows))]
+#[start]
+fn main(_: isize, _: *const *const u8) -> isize {
+    start() as u16 as i16 as isize
+}
+
+#[cfg(windows)]
+extern { type PEB; }
+
+#[cfg(windows)]
+#[no_mangle]
+extern "stdcall" fn mainCRTStartup(_: *mut PEB) -> u32 {
+    start() as u32
+}
+
+#[cfg(windows)]
+#[no_mangle]
+extern fn main() -> ! { panic!() }

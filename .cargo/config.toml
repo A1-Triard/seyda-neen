@@ -1,0 +1,11 @@
+[target.x86_64-pc-windows-gnu]
+rustflags = "-C link-arg=-nostdlib"
+
+[target.x86_64-pc-windows-msvc]
+rustflags = "-C link-arg=/NODEFAULTLIB"
+
+[target.i686-pc-windows-msvc]
+rustflags = "-C link-arg=/NODEFAULTLIB"
+
+[target.i586-pc-windows-msvc]
+rustflags = "-C link-arg=/NODEFAULTLIB"

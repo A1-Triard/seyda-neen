@@ -43,9 +43,13 @@ checksum = "4918e6527b7f815a5452188ff06b8b045dae899a3f8dc57e7dd65c3948229170"
 
 [[package]]
 name = "composable-allocators"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01e1770ba33092050d5f99dc50639f26a3c86ada861f4a5ae19bffa33166ec0c"
+checksum = "89ea1be4d425fe450804b0b7b13e25334c38d1caaa563116c8a94e30e71bbc11"
+dependencies = [
+ "libc",
+ "winapi",
+]
 
 [[package]]
 name = "educe"
@@ -108,6 +112,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "exit-no-std"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d298bc74eb259db5d17d5de08949492a6bd2390e9ed046444908591fa1ca35e"
+dependencies = [
+ "libc",
+ "winapi",
+]
+
+[[package]]
 name = "generics"
 version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -118,12 +132,6 @@ name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
-
-[[package]]
-name = "libc_alloc"
-version = "1.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db1d62455a2746a7f4a67a62d77f969954cd7d3bca46e4d037acd097ba79dab4"
 
 [[package]]
 name = "macro-attr-2018"
@@ -216,6 +224,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
 
 [[package]]
+name = "rlibc"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc874b127765f014d792f16763a81245ab80500e2ad921ed4ee9e82481ee08fe"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -235,12 +249,13 @@ name = "seyda_neen"
 version = "0.0.0"
 dependencies = [
  "components-arena",
+ "composable-allocators",
  "educe",
  "either",
- "libc",
- "libc_alloc",
+ "exit-no-std",
  "macro-attr-2018",
  "panicking",
+ "rlibc",
  "tuifw-screen",
  "tuifw-window",
 ]
