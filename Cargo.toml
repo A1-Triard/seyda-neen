@@ -25,6 +25,3 @@ macro-attr-2018 = "2.1.2"
 panicking = { version = "0.2.0", default-features = false }
 tuifw-screen = "0.13.4"
 tuifw-window = "0.13.4"
-
-[target.'cfg(windows)'.dependencies]
-rlibc = "1.0.0"

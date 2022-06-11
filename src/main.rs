@@ -6,12 +6,12 @@
 #![feature(start)]
 #![windows_subsystem="console"]
 #![no_std]
-#![cfg_attr(windows, no_main)]
-
-extern crate alloc;
 
 #[cfg(windows)]
-extern crate rlibc;
+#[link(name="msvcrt")]
+extern { }
+
+extern crate alloc;
 
 use composable_allocators::{AsGlobal, System};
 
@@ -23,6 +23,14 @@ static ALLOCATOR: AsGlobal<System> = AsGlobal(System);
 fn panic(_panic: &core::panic::PanicInfo) -> ! {
     exit_no_std::exit(b'P')
 }
+
+#[cfg(all(windows, target_env="gnu", not(feature="debug")))]
+#[no_mangle]
+extern fn rust_eh_register_frames () { }
+
+#[cfg(all(windows, target_env="gnu", not(feature="debug")))]
+#[no_mangle]
+extern fn rust_eh_unregister_frames () { }
 
 mod world;
 use world::*;
@@ -200,7 +208,8 @@ macro_rules! nz {
     };
 }
 
-fn start() -> u8 {
+#[start]
+fn main(_: isize, _: *const *const u8) -> isize {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut world = World::new();
     world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 16);
@@ -227,22 +236,3 @@ fn start() -> u8 {
     }
     0
 }
-
-#[cfg(not(windows))]
-#[start]
-fn main(_: isize, _: *const *const u8) -> isize {
-    start() as u16 as i16 as isize
-}
-
-#[cfg(windows)]
-extern { type PEB; }
-
-#[cfg(windows)]
-#[no_mangle]
-extern "stdcall" fn mainCRTStartup(_: *mut PEB) -> u32 {
-    start() as u32
-}
-
-#[cfg(windows)]
-#[no_mangle]
-extern fn main() -> ! { panic!() }
