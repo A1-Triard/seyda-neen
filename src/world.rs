@@ -258,23 +258,41 @@ impl World {
         debug_assert_eq!(straight.x.wrapping_mul(straights as i16), straight_sum.x);
         debug_assert_eq!(straight.y.wrapping_mul(straights as i16), straight_sum.y);
         debug_assert_eq!(diagonal_sum + straight_sum, offset);
-        let (primary_repeat, primary_step, secondary_step) = if straights > diagonals {
+        let (primary_steps, primary_repeat, primary_step, secondary_step) = if straights > diagonals {
             (
+                straights,
                 (straights + diagonals) / (diagonals + 1),
                 straight,
                 diagonal
             )
         } else {
             (
+                diagonals,
                 (diagonals + straights) / (straights + 1),
                 diagonal,
                 straight
             )
         };
         debug_assert_ne!(primary_repeat, 0);
+        let first_primary_repeat = primary_repeat - (primary_repeat - primary_steps % primary_repeat) % primary_repeat;
         let mut f = origin;
         let mut b = p;
+        //let mut n = 0;
+        for _ in 0 .. first_primary_repeat {
+            f = f.offset(primary_step);
+            if f == p { return true; }
+            if !self.wall(f).is_none() { return false; }
+            b = b.offset(-primary_step);
+            if !self.wall(b).is_none() { return false; }
+        }
         loop {
+            //n += 1;
+            //debug_assert!(n <= 0u16.wrapping_sub((neg_abs(offset.x) + neg_abs(offset.y)) as u16), "{:?}", offset);
+            f = f.offset(secondary_step);
+            if f == p { return true; }
+            if !self.wall(f).is_none() { return false; }
+            b = b.offset(-secondary_step);
+            if !self.wall(b).is_none() { return false; }
             for _ in 0 .. primary_repeat {
                 f = f.offset(primary_step);
                 if f == p { return true; }
@@ -282,11 +300,6 @@ impl World {
                 b = b.offset(-primary_step);
                 if !self.wall(b).is_none() { return false; }
             }
-            f = f.offset(secondary_step);
-            if f == p { return true; }
-            if !self.wall(f).is_none() { return false; }
-            b = b.offset(-secondary_step);
-            if !self.wall(b).is_none() { return false; }
         }
     }
 }
