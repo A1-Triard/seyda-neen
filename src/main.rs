@@ -125,6 +125,12 @@ fn render_map(
             Cell { player: true, .. } => (Color::Blue, Attr::empty(), "@"),
             Cell { wall: Wall::None, is_visible: false, .. } => (Color::White, Attr::empty(), "·"),
             Cell { wall: Wall::None, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
+            Cell { wall: Wall::Roof, is_visible: false, .. } => {
+                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
+                let ch = if matches!(r, Wall::Roof) { "░░" } else { "░" };
+                (Color::White, Attr::empty(), ch)
+            },
+            Cell { wall: Wall::Roof, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
             Cell { wall: Wall::Door { opened }, .. } => {
                 let horizontal = opened ^ {
                     let h1 = !visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall.is_none();
@@ -146,32 +152,22 @@ fn render_map(
                 let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall;
                 let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall;
                 let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }].wall;
-                let ch = match (!l.is_none(), !u.is_none(), r, !d.is_none()) {
-                    (false, false, Wall::None, false) => "│",
-                    (false, false, Wall::None, true) => "┬",
-                    (false, false, Wall::Door { .. }, false) => "─",
-                    (false, false, Wall::Wall, false) => "──",
-                    (false, false, Wall::Door { .. }, true) => "┌",
-                    (false, false, Wall::Wall, true) => "┌─",
-                    (false, true, Wall::None, false) => "┴",
-                    (false, true, Wall::None, true) => "│",
-                    (false, true, Wall::Door { .. }, false) => "└",
-                    (false, true, Wall::Wall, false) => "└─",
-                    (false, true, Wall::Door { .. }, true) => "├",
-                    (false, true, Wall::Wall, true) => "├─",
-                    (true, false, Wall::None, false) => "─",
-                    (true, false, Wall::None, true) => "┐",
-                    (true, false, Wall::Door { .. }, false) => "─",
-                    (true, false, Wall::Wall, false) => "──",
-                    (true, false, Wall::Door { .. }, true) => "┬",
-                    (true, false, Wall::Wall, true) => "┬─",
-                    (true, true, Wall::None, false) => "┘",
-                    (true, true, Wall::None, true) => "┤",
-                    (true, true, Wall::Door { .. }, false) => "┴",
-                    (true, true, Wall::Wall, false) => "┴─",
-                    (true, true, Wall::Door { .. }, true) => "┼",
-                    (true, true, Wall::Wall, true) => "┼─",
+                let l = !l.is_none() as u8;
+                let u = !u.is_none() as u8;
+                let r = if matches!(r, Wall::None | Wall::Roof) {
+                    0
+                } else if matches!(r, Wall::Door { .. }) {
+                    1
+                } else {
+                    2
                 };
+                let d = !d.is_none() as u8;
+                let index = (r << 3) | (l << 2) | (u << 1) | d;
+                let ch = [
+                    "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
+                    "─", "┌", "└", "├", "─", "┬", "┴", "┼",
+                    "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
+                ][index as usize];
                 (Color::White, Attr::empty(), ch)
             },
         };

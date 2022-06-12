@@ -122,10 +122,11 @@ pub enum Wall {
     None,
     Door { opened: bool },
     Wall,
+    Roof,
 }
 
 impl Wall {
-    pub fn is_none(&self) -> bool { matches!(self, Wall::None) }
+    pub fn is_none(&self) -> bool { matches!(self, Wall::None | Wall::Roof) }
     pub fn is_barrier(&self) -> bool { matches!(self, Wall::Wall | Wall::Door { opened: false }) }
 }
 
@@ -168,7 +169,7 @@ impl World {
 
     pub fn move_player(&mut self, p: Point) {
         match self.wall(p) {
-            Wall::None | Wall::Door { opened: true } => { },
+            Wall::None | Wall::Roof | Wall::Door { opened: true } => { },
             Wall::Door { opened: false } => {
                 self.open_door(p);
             },
@@ -227,16 +228,19 @@ impl World {
             for &building in sector_buildings {
                 let building = &self.buildings[building];
                 let rect = building.rect();
-                if
-                    rect.l_line().contains(p) || rect.t_line().contains(p) ||
-                    rect.r_line().contains(p) || rect.b_line().contains(p)
-                {
-                    let door = building.door() == p;
-                    return if door {
-                        Wall::Door { opened: building.door_is_open }
-                    } else {
-                        Wall::Wall
-                    };
+                if rect.contains(p) {
+                    if
+                        rect.l_line().contains(p) || rect.t_line().contains(p) ||
+                        rect.r_line().contains(p) || rect.b_line().contains(p)
+                    {
+                        let door = building.door() == p;
+                        return if door {
+                            Wall::Door { opened: building.door_is_open }
+                        } else {
+                            Wall::Wall
+                        };
+                    }
+                    return if building.door_is_open { Wall::None } else { Wall::Roof };
                 }
             }
             Wall::None
