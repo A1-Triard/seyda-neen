@@ -212,7 +212,9 @@ macro_rules! nz {
 fn main(_: isize, _: *const *const u8) -> isize {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
     let mut world = World::new();
-    world.add_building(Point { x: 6, y: 3 }, nz!(5), nz!(4), 16);
+    world.add_building(Point { x: -5, y: 0 }, nz!(5), nz!(7), 14);
+    world.add_building(Point { x: 4, y: 1 }, nz!(5), nz!(7), 2);
+    world.add_building(Point { x: -2, y: 11 }, nz!(12), nz!(7), 28);
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
@@ -222,7 +224,11 @@ fn main(_: isize, _: *const *const u8) -> isize {
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
     let map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
     loop {
-        let event = WindowTree::update(&mut windows, true, &mut game).unwrap().unwrap();
+        let event = loop {
+            if let Some(event) = WindowTree::update(&mut windows, true, &mut game).unwrap() {
+                break event;
+            }
+        };
         let step = match event {
             Event::Key(_, Key::Escape) => break,
             Event::Key(n, Key::Right) => Vector { x: (n.get() as i16), y: 0 },
