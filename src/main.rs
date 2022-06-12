@@ -125,13 +125,13 @@ fn render_map(
             Cell { player: true, .. } => (Color::Blue, Attr::empty(), "@"),
             Cell { wall: Wall::None, is_visible: false, .. } => (Color::White, Attr::empty(), "·"),
             Cell { wall: Wall::None, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
-            Cell { wall: Wall::Door, .. } => {
-                let horizontal = {
-                    let h1 = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall == Wall::Wall;
+            Cell { wall: Wall::Door { opened }, .. } => {
+                let horizontal = opened ^ {
+                    let h1 = !visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall.is_none();
                     if !h1 {
-                        let v1 = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall == Wall::Wall;
+                        let v1 = !visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall.is_none();
                         if !v1 {
-                            visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall == Wall::Wall
+                            !visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall.is_none()
                         } else {
                             false
                         }
@@ -142,34 +142,34 @@ fn render_map(
                 (Color::Green, Attr::empty(), if horizontal { "─" } else { "|" })
             },
             Cell { wall: Wall::Wall, .. } => {
-                let r = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
-                let d = visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall;
-                let l = visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall;
-                let u = visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }].wall;
+                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
+                let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall;
+                let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall;
+                let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }].wall;
                 let ch = match (!l.is_none(), !u.is_none(), r, !d.is_none()) {
                     (false, false, Wall::None, false) => "│",
                     (false, false, Wall::None, true) => "┬",
-                    (false, false, Wall::Door, false) => "─",
+                    (false, false, Wall::Door { .. }, false) => "─",
                     (false, false, Wall::Wall, false) => "──",
-                    (false, false, Wall::Door, true) => "┌",
+                    (false, false, Wall::Door { .. }, true) => "┌",
                     (false, false, Wall::Wall, true) => "┌─",
                     (false, true, Wall::None, false) => "┴",
                     (false, true, Wall::None, true) => "│",
-                    (false, true, Wall::Door, false) => "└",
+                    (false, true, Wall::Door { .. }, false) => "└",
                     (false, true, Wall::Wall, false) => "└─",
-                    (false, true, Wall::Door, true) => "├",
+                    (false, true, Wall::Door { .. }, true) => "├",
                     (false, true, Wall::Wall, true) => "├─",
                     (true, false, Wall::None, false) => "─",
                     (true, false, Wall::None, true) => "┐",
-                    (true, false, Wall::Door, false) => "─",
+                    (true, false, Wall::Door { .. }, false) => "─",
                     (true, false, Wall::Wall, false) => "──",
-                    (true, false, Wall::Door, true) => "┬",
+                    (true, false, Wall::Door { .. }, true) => "┬",
                     (true, false, Wall::Wall, true) => "┬─",
                     (true, true, Wall::None, false) => "┘",
                     (true, true, Wall::None, true) => "┤",
-                    (true, true, Wall::Door, false) => "┴",
+                    (true, true, Wall::Door { .. }, false) => "┴",
                     (true, true, Wall::Wall, false) => "┴─",
-                    (true, true, Wall::Door, true) => "┼",
+                    (true, true, Wall::Door { .. }, true) => "┼",
                     (true, true, Wall::Wall, true) => "┼─",
                 };
                 (Color::White, Attr::empty(), ch)

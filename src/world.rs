@@ -70,6 +70,7 @@ macro_attr! {
         w: NonZeroU8,
         h: NonZeroU8,
         door: u16,
+        door_is_open: bool,
     }
 }
 
@@ -116,18 +117,19 @@ impl Building {
     }
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+#[derive(Debug, Clone)]
 pub enum Wall {
     None,
-    Door,
+    Door { opened: bool },
     Wall,
 }
 
 impl Wall {
-    pub fn is_none(self) -> bool { self == Wall::None }
+    pub fn is_none(&self) -> bool { matches!(self, Wall::None) }
+    pub fn is_barrier(&self) -> bool { matches!(self, Wall::Wall | Wall::Door { opened: false }) }
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+#[derive(Debug, Clone)]
 pub struct Cell {
     pub wall: Wall,
     pub is_visible: bool,
@@ -165,9 +167,14 @@ impl World {
     }
 
     pub fn move_player(&mut self, p: Point) {
-        if self.wall(p) != Wall::Wall {
-            self.player = p;
+        match self.wall(p) {
+            Wall::None | Wall::Door { opened: true } => { },
+            Wall::Door { opened: false } => {
+                self.open_door(p);
+            },
+            Wall::Wall => return,
         }
+        self.player = p;
     }
 
     fn sector(&self, p: Point) -> Option<(Id<Sector>, &Vec<Id<Building>>)> {
@@ -200,7 +207,8 @@ impl World {
         let (building, rect) = self.buildings.insert(|id| {
             let building = Building {
                 tl, w, h,
-                door: door % (2 * w.get() as u16 + 2 * h.get() as u16)
+                door: door % (2 * w.get() as u16 + 2 * h.get() as u16),
+                door_is_open: false,
             };
             let rect = building.rect();
             (building, (id, rect))
@@ -217,19 +225,47 @@ impl World {
     fn wall(&self, p: Point) -> Wall {
         if let Some((_, sector_buildings)) = self.sector(p) {
             for &building in sector_buildings {
-                let rect = self.buildings[building].rect();
+                let building = &self.buildings[building];
+                let rect = building.rect();
                 if
                     rect.l_line().contains(p) || rect.t_line().contains(p) ||
                     rect.r_line().contains(p) || rect.b_line().contains(p)
                 {
-                    let door = self.buildings[building].door() == p;
-                    return if door { Wall::Door } else { Wall::Wall };
+                    let door = building.door() == p;
+                    return if door {
+                        Wall::Door { opened: building.door_is_open }
+                    } else {
+                        Wall::Wall
+                    };
                 }
             }
             Wall::None
         } else {
             Wall::None
         }
+    }
+
+    fn open_door(&mut self, p: Point) {
+        let building = if let Some((_, sector_buildings)) = self.sector(p) {
+            'r: loop {
+                for &building in sector_buildings {
+                    let rect = self.buildings[building].rect();
+                    if
+                        rect.l_line().contains(p) || rect.t_line().contains(p) ||
+                        rect.r_line().contains(p) || rect.b_line().contains(p)
+                    {
+                        break 'r building;
+                    }
+                }
+                panic!();
+            }
+        } else {
+            panic!();
+        };
+        let building = &mut self.buildings[building];
+        let door = building.door() == p;
+        assert!(door);
+        building.door_is_open = true;
     }
 
     pub fn render(&self, area: &mut VisibleArea) {
@@ -265,16 +301,16 @@ impl World {
         for _ in 0 .. diagonals {
             f = f.offset(diagonal);
             if f == p { return true; }
-            if !self.wall(f).is_none() { return false; }
+            if self.wall(f).is_barrier() { return false; }
             b = b.offset(-diagonal);
-            if !self.wall(b).is_none() { return false; }
+            if self.wall(b).is_barrier() { return false; }
         }
         for _ in 0 .. straights {
             f = f.offset(straight);
             if f == p { return true; }
-            if !self.wall(f).is_none() { return false; }
+            if self.wall(f).is_barrier() { return false; }
             b = b.offset(-straight);
-            if !self.wall(b).is_none() { return false; }
+            if self.wall(b).is_barrier() { return false; }
         }
         true
     }
