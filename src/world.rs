@@ -130,6 +130,7 @@ impl Wall {
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub struct Cell {
     pub wall: Wall,
+    pub is_visible: bool,
     pub player: bool,
 }
 
@@ -234,11 +235,64 @@ impl World {
     pub fn render(&self, area: &mut VisibleArea) {
         for p in area.bounds().points() {
             area[p].wall = self.wall(p);
+            area[p].is_visible = self.is_visible_from(self.player, p);
         }
         if area.bounds().contains(self.player) {
             area[self.player].player = true;
         }
     }
+
+    fn is_visible_from(&self, origin: Point, p: Point) -> bool {
+        let offset = p.offset_from(origin);
+        if offset.is_null() { return true; }
+        let diagonals = 0u16.wrapping_sub(max(neg_abs(offset.x), neg_abs(offset.y)) as u16);
+        let diagonal = Vector { x: offset.x.signum(), y: offset.y.signum() };
+        let diagonal_sum = Vector {
+            x: diagonal.x.wrapping_mul(diagonals as i16),
+            y: diagonal.y.wrapping_mul(diagonals as i16),
+        };
+        let straight_sum = offset - diagonal_sum;
+        debug_assert!(straight_sum.x == 0 || straight_sum.y == 0);
+        let straights = 0u16.wrapping_sub((neg_abs(straight_sum.x) + neg_abs(straight_sum.y)) as u16);
+        let straight = Vector { x: straight_sum.x.signum(), y: straight_sum.y.signum() };
+        debug_assert_eq!(straight.x.wrapping_mul(straights as i16), straight_sum.x);
+        debug_assert_eq!(straight.y.wrapping_mul(straights as i16), straight_sum.y);
+        debug_assert_eq!(diagonal_sum + straight_sum, offset);
+        let (primary_repeat, primary_step, secondary_step) = if straights > diagonals {
+            (
+                (straights + diagonals) / (diagonals + 1),
+                straight,
+                diagonal
+            )
+        } else {
+            (
+                (diagonals + straights) / (straights + 1),
+                diagonal,
+                straight
+            )
+        };
+        debug_assert_ne!(primary_repeat, 0);
+        let mut f = origin;
+        let mut b = p;
+        loop {
+            for _ in 0 .. primary_repeat {
+                f = f.offset(primary_step);
+                if f == p { return true; }
+                if !self.wall(f).is_none() { return false; }
+                b = b.offset(-primary_step);
+                if !self.wall(b).is_none() { return false; }
+            }
+            f = f.offset(secondary_step);
+            if f == p { return true; }
+            if !self.wall(f).is_none() { return false; }
+            b = b.offset(-secondary_step);
+            if !self.wall(b).is_none() { return false; }
+        }
+    }
+}
+
+fn neg_abs(n: i16) -> i16 {
+    n.checked_abs().map_or(i16::MIN, |a| -a)
 }
 
 #[derive(Debug)]
@@ -254,7 +308,10 @@ impl VisibleArea {
 
     pub fn new(center: Point, visibility: i8) -> Self {
         let size = Self::size(visibility);
-        let cells = vec![Cell { wall: Wall::None, player: false }; size as usize * size as usize];
+        let cells = vec![
+            Cell { wall: Wall::None, is_visible: false, player: false };
+            size as usize * size as usize
+        ];
         let size = Vector { x: size as u16 as i16, y: size as u16 as i16 };
         let center_margin = Thickness::align(Vector { x: 1, y: 1 }, size, HAlign::Center, VAlign::Center);
         let bounds = center_margin.expand_rect(Rect { tl: center, size: Vector { x: 1, y: 1 } });

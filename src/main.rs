@@ -123,7 +123,8 @@ fn render_map(
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match visible_area[p] {
             Cell { player: true, .. } => (Color::Blue, Attr::empty(), "@"),
-            Cell { wall: Wall::None, .. } => (Color::White, Attr::empty(), "·"),
+            Cell { wall: Wall::None, is_visible: false, .. } => (Color::White, Attr::empty(), "·"),
+            Cell { wall: Wall::None, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
             Cell { wall: Wall::Door, .. } => {
                 let horizontal = {
                     let h1 = visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall == Wall::Wall;
