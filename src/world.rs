@@ -178,6 +178,11 @@ impl World {
         self.player = p;
     }
 
+    #[allow(dead_code)]
+    pub fn close_door(&mut self, p: Point) {
+        self.set_door_is_open(p, false);
+    }
+
     fn sector(&self, p: Point) -> Option<(Id<Sector>, &Vec<Id<Building>>)> {
         let mut sector = self.area;
         if !self.sectors[sector].rect.contains(p) { return None; }
@@ -249,7 +254,11 @@ impl World {
         }
     }
 
-    fn open_door(&mut self, p: Point) {
+    pub fn open_door(&mut self, p: Point) {
+        self.set_door_is_open(p, true);
+    }
+
+    fn set_door_is_open(&mut self, p: Point, door_is_open: bool) {
         let building = if let Some((_, sector_buildings)) = self.sector(p) {
             'r: loop {
                 for &building in sector_buildings {
@@ -269,7 +278,7 @@ impl World {
         let building = &mut self.buildings[building];
         let door = building.door() == p;
         assert!(door);
-        building.door_is_open = true;
+        building.door_is_open = door_is_open;
     }
 
     pub fn render(&self, area: &mut VisibleArea) {
