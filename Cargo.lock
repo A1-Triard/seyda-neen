@@ -272,6 +272,7 @@ dependencies = [
  "composable-allocators",
  "educe",
  "either",
+ "enum-derive-2018",
  "exit-no-std",
  "macro-attr-2018",
  "nonmax",

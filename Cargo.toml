@@ -20,6 +20,7 @@ components-arena = "3.3.3"
 composable-allocators = "0.1.1"
 educe = "0.4.19"
 either = { version = "1.6.1", default-features = false }
+enum-derive-2018 = { version = "2.0.1", default-features = false }
 exit-no-std = "0.1.0"
 macro-attr-2018 = "2.1.2"
 nonmax = { version = "0.5.0", default-features = false }

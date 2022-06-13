@@ -126,32 +126,10 @@ fn render_map(
         if norm_x_2(v) + 1 > 2 * game.visibility as u32 { continue; }
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match &visible_area[p] {
-            Cell::Wall => {
+            Cell::Wall => render_wall(&visible_area, p),
+            Cell::Invis(CellInvis::Roof) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-                let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-                let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
-                let l = matches!(l, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
-                let u = matches!(u, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
-                let r = if matches!(r, Cell::Wall) {
-                    0
-                } else if matches!(r, Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) {
-                    1
-                } else {
-                    2
-                };
-                let d = matches!(d, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
-                let index = (r << 3) | (l << 2) | (u << 1) | d;
-                let ch = [
-                    "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
-                    "─", "┌", "└", "├", "─", "┬", "┴", "┼",
-                    "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
-                ][index as usize];
-                (Color::White, Attr::empty(), ch)
-            },
-            Cell::Invis { roof: true } => {
-                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let ch = if matches!(r, Cell::Invis { roof: true }) { "░░" } else { "░" };
+                let ch = if matches!(r, Cell::Invis(CellInvis::Roof)) { "░░" } else { "░" };
                 (Color::White, Attr::empty(), ch)
             },
             Cell::Vis { npc: Some(npc), .. } => {
@@ -161,33 +139,15 @@ fn render_map(
                     (Color::Green, Attr::empty(), "C")
                 }
             },
-            Cell::Invis { roof: false } => (Color::White, Attr::empty(), "·"),
+            Cell::Invis(CellInvis::None) => (Color::White, Attr::empty(), "·"),
             Cell::Vis { obj: None, .. } => (Color::White, Attr::INTENSITY, "∙"),
             Cell::Vis { obj: Some(CellObj::Door { locked }), .. } => {
-                let opened = locked.is_none();
+                let closed = locked.is_some();
                 let locked = locked.map_or(false, |x| x);
-                let horizontal = opened ^ {
-                    let h1 = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                    let h1 = matches!(h1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
-                    if !h1 {
-                        let v1 = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-                        let v1 = matches!(v1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
-                        if !v1 {
-                            let h2 = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-                            matches!(h2, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. })
-                        } else {
-                            false
-                        }
-                    } else {
-                        true
-                    }
-                };
-                (
-                    if locked { Color::Red } else { Color::Green },
-                    Attr::empty(),
-                    if horizontal { "─" } else { "|" }
-                )
+                render_door(&visible_area, p, closed, Some(locked))
             },
+            &Cell::Invis(CellInvis::Door { closed }) =>
+                render_door(&visible_area, p, closed, None),
             Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
                 if *locked { Color::Red } else { Color::Green },
                 Attr::empty(),
@@ -195,6 +155,74 @@ fn render_map(
             ),
         };
         port.out(v, fg, BG, attr, ch);
+    }
+}
+
+fn is_wall(cell: &Cell) -> bool {
+    matches!(cell, Cell::Wall)
+}
+
+fn is_door(cell: &Cell) -> bool {
+    matches!(
+        cell,
+        Cell::Invis(CellInvis::Door { .. }) | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
+    )
+}
+
+fn render_wall(
+    visible_area: &VisibleArea,
+    p: Point,
+) -> (Color, Attr, &'static str) {
+    let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+    let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+    let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+    let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
+    let l = (is_wall(l) || is_door(l)) as u8;
+    let u = (is_wall(u) || is_door(u)) as u8;
+    let r = if is_wall(r) {
+        0
+    } else if is_door(r) {
+        1
+    } else {
+        2
+    };
+    let d = (is_wall(d) || is_door(d)) as u8;
+    let index = (r << 3) | (l << 2) | (u << 1) | d;
+    let ch = [
+        "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
+        "─", "┌", "└", "├", "─", "┬", "┴", "┼",
+        "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
+    ][index as usize];
+    (Color::White, Attr::empty(), ch)
+}
+
+fn render_door(
+    visible_area: &VisibleArea,
+    p: Point,
+    closed: bool,
+    locked: Option<bool>
+) -> (Color, Attr, &'static str) {
+    let horizontal = !closed ^ {
+        let h1 = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+        let h1 = matches!(h1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
+        if !h1 {
+            let v1 = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+            let v1 = matches!(v1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
+            if !v1 {
+                let h2 = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+                matches!(h2, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. })
+            } else {
+                false
+            }
+        } else {
+            true
+        }
+    };
+    let ch = if horizontal { "─" } else { "|" };
+    match locked {
+        None => (Color::White, Attr::empty(), ch),
+        Some(false) => (Color::Green, Attr::empty(), ch),
+        Some(true) => (Color::Red, Attr::empty(), ch)
     }
 }
 

@@ -8,6 +8,7 @@ use core::mem::replace;
 use core::ops::{Index, IndexMut};
 use educe::Educe;
 use either::{Either, Left, Right};
+use enum_derive_2018::IterVariants;
 use macro_attr_2018::macro_attr;
 use nonmax::NonMaxU8;
 use rand::{Rng, SeedableRng};
@@ -44,10 +45,13 @@ pub enum NpcClass {
     Mercenery,
 }
 
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-pub enum Direction {
-    N, S, W, E,
-    NW, NE, SW, SE
+macro_attr! {
+    #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+    #[derive(IterVariants!(DirectionVariants))]
+    pub enum Direction {
+        N, S, W, E,
+        NW, NE, SW, SE
+    }
 }
 
 impl Direction {
@@ -389,8 +393,21 @@ impl World {
     pub fn render(&self, area: &mut VisibleArea) {
         let player = self.player();
         for p in area.bounds().points() {
+            area.index_raw_mut(p).1 = 2 * self.is_visible_from(player, p) as u8;
+        }
+        for p in Thickness::all(1).shrink_rect(area.bounds()).points() {
+            if area.index_raw(p).1 == 0 {
+                for direction in Direction::iter_variants() {
+                    if area.index_raw(p.offset(direction.vector())).1 == 2 {
+                        area.index_raw_mut(p).1 = 1;
+                        break;
+                    }
+                }
+            }
+        }
+        for p in area.bounds().points() {
             let mut wall = false;
-            let mut door = false;
+            let mut door_closed = None;
             let mut roof = false;
             let mut obj = None;
             let mut npc = None;
@@ -399,7 +416,8 @@ impl World {
                     ObjData::Roof => roof = true,
                     ObjData::Wall => wall = true,
                     ObjData::Door(door_data) => {
-                        door = true;
+                        wall = true;
+                        door_closed = Some(door_data.locked.is_some());
                         obj = Some(CellObj::Door { locked: door_data.locked.map(|x| x.get() != 0) });
                     },
                     ObjData::Chest(chest) => obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
@@ -411,12 +429,19 @@ impl World {
                     }),
                 }
             }
-            area[p] = if wall && !door {
+            let cell = area.index_raw_mut(p);
+            cell.0 = if wall && (door_closed.is_none() || cell.1 == 0) {
                 Cell::Wall
-            } else if !self.is_visible_from(player, p) {
-                if door || wall { Cell::Wall } else { Cell::Invis { roof } }
-            } else {
+            } else if cell.1 == 2 {
                 Cell::Vis { obj, npc }
+            } else if roof {
+                Cell::Invis(CellInvis::Roof)
+            } else if cell.1 == 0 {
+                Cell::Invis(CellInvis::None)
+            } else if let Some(door_closed) = door_closed {
+                Cell::Invis(CellInvis::Door { closed: door_closed })
+            } else {
+                Cell::Invis(CellInvis::None)
             };
         }
     }
@@ -478,16 +503,23 @@ pub enum CellObj {
 }
 
 #[derive(Debug, Clone)]
+pub enum CellInvis {
+    None,
+    Roof,
+    Door { closed: bool },
+}
+
+#[derive(Debug, Clone)]
 pub enum Cell {
     Wall,
     Vis { obj: Option<CellObj>, npc: Option<CellNpc> },
-    Invis { roof: bool },
+    Invis(CellInvis),
 }
 
 #[derive(Debug)]
 pub struct VisibleArea {
     bounds: Rect,
-    cells: Vec<Cell>,
+    cells: Vec<(Cell, u8)>,
 }
 
 impl VisibleArea {
@@ -497,7 +529,7 @@ impl VisibleArea {
 
     pub fn new(center: Point, visibility: i8) -> Self {
         let size = Self::size(visibility);
-        let cells = vec![Cell::Wall; size as usize * size as usize];
+        let cells = vec![(Cell::Wall, 0); size as usize * size as usize];
         let size = Vector { x: size as u16 as i16, y: size as u16 as i16 };
         let center_margin = Thickness::align(Vector { x: 1, y: 1 }, size, HAlign::Center, VAlign::Center);
         let bounds = center_margin.expand_rect(Rect { tl: center, size: Vector { x: 1, y: 1 } });
@@ -505,24 +537,32 @@ impl VisibleArea {
     }
 
     pub fn bounds(&self) -> Rect { self.bounds }
+
+    fn index_raw(&self, index: Point) -> &(Cell, u8) {
+        assert!(self.bounds.contains(index));
+        let v = index.offset_from(self.bounds.tl);
+        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
+        &self.cells[i]
+    }
+
+    fn index_raw_mut(&mut self, index: Point) -> &mut (Cell, u8) {
+        assert!(self.bounds.contains(index));
+        let v = index.offset_from(self.bounds.tl);
+        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
+        &mut self.cells[i]
+    }
 }
 
 impl Index<Point> for VisibleArea {
     type Output = Cell;
 
     fn index(&self, index: Point) -> &Cell {
-        assert!(self.bounds.contains(index));
-        let v = index.offset_from(self.bounds.tl);
-        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
-        &self.cells[i]
+        &self.index_raw(index).0
     }
 }
 
 impl IndexMut<Point> for VisibleArea {
     fn index_mut(&mut self, index: Point) -> &mut Cell {
-        assert!(self.bounds.contains(index));
-        let v = index.offset_from(self.bounds.tl);
-        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
-        &mut self.cells[i]
+        &mut self.index_raw_mut(index).0
     }
 }
