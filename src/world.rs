@@ -220,16 +220,9 @@ impl World {
         self.bounds(self.player).tl
     }
 
-    pub fn player_data(&self) -> &dyn Any {
-        match &self.objs[self.player].obj {
-            Obj::Npc(Npc { ai_data, .. }) => ai_data.as_ref(),
-            _ => unreachable!()
-        }
-    }
-
-    pub fn player_data_mut(&mut self) -> &mut dyn Any {
+    pub fn player_data_mut<T: Any>(&mut self) -> &mut T {
         match &mut self.objs[self.player].obj {
-            Obj::Npc(Npc { ai_data, .. }) => ai_data.as_mut(),
+            Obj::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
             _ => unreachable!()
         }
     }
@@ -314,7 +307,7 @@ impl World {
             .collect::<Vec<_>>();
         for npc in &mut npcs {
             let ai_data = if let Obj::Npc(npc) = &mut self.objs[npc.id].obj {
-                &mut npc.ai_data
+                npc.ai_data.as_mut()
             } else {
                 unreachable!()
             };

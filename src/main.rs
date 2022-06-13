@@ -333,8 +333,7 @@ fn main(_: isize, _: *const *const u8) -> isize {
             _ => None,
         };
         if let Some((n, direction)) = movement {
-            let player_data = game.world.player_data_mut().downcast_mut::<PlayerData>().unwrap();
-            player_data.desired_movement_direction = Some(direction);
+            game.world.player_data_mut::<PlayerData>().desired_movement_direction = Some(direction);
             for _ in 0 .. n.get() {
                 game.world.step();
             }
