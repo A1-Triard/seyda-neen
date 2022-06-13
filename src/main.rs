@@ -283,11 +283,11 @@ fn door_offset(w: NonZeroU8, h: NonZeroU8, door: u16) -> Vector {
 fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16) {
     let door = tl.offset(door_offset(w, h, door));
     let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
-    world.add(bounds.l_line(), Obj::Wall);
-    world.add(bounds.t_line(), Obj::Wall);
-    world.add(bounds.r_line(), Obj::Wall);
-    world.add(bounds.b_line(), Obj::Wall);
-    world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, Obj::Door(Door {
+    world.add(bounds.l_line(), ObjData::Wall);
+    world.add(bounds.t_line(), ObjData::Wall);
+    world.add(bounds.r_line(), ObjData::Wall);
+    world.add(bounds.b_line(), ObjData::Wall);
+    world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
         locked: Some(unsafe { NonMaxU8::new_unchecked(0) }),
         key: 0
     }));

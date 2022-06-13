@@ -1,7 +1,7 @@
 use alloc::boxed::Box;
 use alloc::vec;
 use alloc::vec::Vec;
-use components_arena::{Arena, Component, Id};
+use components_arena::{Arena, Component, Id, NewtypeComponentId};
 use core::any::Any;
 use core::cmp::max;
 use core::mem::replace;
@@ -95,7 +95,7 @@ pub struct Chest {
 }
 
 #[derive(Debug)]
-pub enum Obj {
+pub enum ObjData {
     Door(Door),
     Chest(Chest),
     Npc(Npc),
@@ -105,22 +105,28 @@ pub enum Obj {
 
 macro_attr! {
     #[derive(Debug, Component!)]
-    struct WorldObj {
-        obj: Obj,
+    struct ObjNode {
+        data: ObjData,
         bounds: Rect
     }
+}
+
+macro_attr! {
+    #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+    #[derive(NewtypeComponentId!)]
+    pub struct Obj(Id<ObjNode>);
 }
 
 macro_attr! {
     #[derive(Debug, Component!)]
     struct Sector {
         bounds: Rect,
-        data: Either<[Id<Sector>; 4], Vec<Id<WorldObj>>>,
+        data: Either<[Id<Sector>; 4], Vec<Obj>>,
     }
 }
 
 impl Sector {
-    fn split_if_needed(this: Id<Self>, sectors: &mut Arena<Sector>, objs: &mut Arena<WorldObj>) {
+    fn split_if_needed(this: Id<Self>, sectors: &mut Arena<Sector>, objs: &mut Arena<ObjNode>) {
         let sector = &mut sectors[this];
         if sector.bounds.area() <= SECTOR_AREA_MIN { return; }
         let sector_objs = if let Right(objs) = sector.data.as_mut() {
@@ -151,7 +157,7 @@ impl Sector {
         ].map(|bounds| {
             let mut subsector_objs = Vec::new();
             for &obj in &sector_objs {
-                if !objs[obj].bounds.intersect(bounds).is_empty() {
+                if !objs[obj.0].bounds.intersect(bounds).is_empty() {
                     subsector_objs.push(obj);
                 }
             }
@@ -167,8 +173,8 @@ impl Sector {
 #[derive(Debug)]
 pub struct World {
     rng: SmallRng,
-    player: Id<WorldObj>,
-    objs: Arena<WorldObj>,
+    player: Obj,
+    objs: Arena<ObjNode>,
     sectors: Arena<Sector>,
     area: [Id<Sector>; 4],
 }
@@ -176,10 +182,10 @@ pub struct World {
 impl World {
     pub fn new(player: Npc) -> Self {
         let mut objs = Arena::new();
-        let player = objs.insert(|id| (WorldObj {
-            obj: Obj::Npc(player),
+        let player = objs.insert(|id| (ObjNode {
+            data: ObjData::Npc(player),
             bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: 1, y: 1 } },
-        }, id));
+        }, Obj(id)));
         let mut sectors = Arena::new();
         let tl = sectors.insert(|id| (Sector {
             bounds: Rect::from_tl_br(
@@ -212,25 +218,18 @@ impl World {
         World { rng: SmallRng::from_entropy(), player, objs, sectors, area: [tr, tl, bl, br] }
     }
 
-    fn bounds(&self, obj: Id<WorldObj>) -> Rect {
-        self.objs[obj].bounds
-    }
-
     pub fn player(&self) -> Point {
-        self.bounds(self.player).tl
+        self.objs[self.player.0].bounds.tl
     }
 
     pub fn player_data_mut<T: Any>(&mut self) -> &mut T {
-        match &mut self.objs[self.player].obj {
-            Obj::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
+        match &mut self.objs[self.player.0].data {
+            ObjData::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
             _ => unreachable!()
         }
     }
 
-    pub fn add(&mut self, bounds: Rect, obj: Obj) {
-        let obj = self.objs.insert(|id|
-            (WorldObj { bounds, obj }, id)
-        );
+    fn add_raw(&mut self, bounds: Rect, obj: Obj) {
         for p in bounds.points() {
             let (sector, sector_objs) = self.sector_mut(p);
             if !sector_objs.iter().any(|&x| x == obj) {
@@ -240,7 +239,29 @@ impl World {
         }
     }
 
-    fn sector(&self, p: Point) -> (Id<Sector>, &Vec<Id<WorldObj>>) {
+    fn remove_raw(&mut self, bounds: Rect, obj: Obj) {
+        for p in bounds.points() {
+            let (_, sector_objs) = self.sector_mut(p);
+            if let Some(index) = sector_objs.iter().position(|&x| x == obj) {
+                sector_objs.swap_remove(index);
+            }
+        }
+    }
+
+    pub fn add(&mut self, bounds: Rect, data: ObjData) -> Obj {
+        let obj = self.objs.insert(|id|
+            (ObjNode { bounds, data }, Obj(id))
+        );
+        self.add_raw(bounds, obj);
+        obj
+    }
+
+    pub fn remove(&mut self, obj: Obj) {
+        let bounds = self.objs.remove(obj.0).bounds;
+        self.remove_raw(bounds, obj);
+    }
+
+    fn sector(&self, p: Point) -> (Id<Sector>, &Vec<Obj>) {
         let mut subsectors = &self.area;
         loop {
             let &sector = subsectors.into_iter().find(|&&x| self.sectors[x].bounds.contains(p)).unwrap();
@@ -251,7 +272,7 @@ impl World {
         }
     }
 
-    fn sector_mut(&mut self, p: Point) -> (Id<Sector>, &mut Vec<Id<WorldObj>>) {
+    fn sector_mut(&mut self, p: Point) -> (Id<Sector>, &mut Vec<Obj>) {
         let mut subsectors = self.area.clone();
         let (id, obj) = loop {
             let sector = subsectors.into_iter().find(|&x| self.sectors[x].bounds.contains(p)).unwrap();
@@ -263,11 +284,11 @@ impl World {
         (id, unsafe { &mut *obj })
     }
 
-    fn objs(&self, p: Point) -> impl Iterator<Item=(Id<WorldObj>, &Obj)> {
-        self.sector(p).1.iter().filter_map(move |&world_obj| {
-            let world_obj_data = &self.objs[world_obj];
-            if world_obj_data.bounds.contains(p) {
-                Some((world_obj, &world_obj_data.obj))
+    fn objs(&self, p: Point) -> impl Iterator<Item=(Obj, &ObjData)> {
+        self.sector(p).1.iter().filter_map(move |&obj| {
+            let obj_node = &self.objs[obj.0];
+            if obj_node.bounds.contains(p) {
+                Some((obj, &obj_node.data))
             } else {
                 None
             }
@@ -275,12 +296,12 @@ impl World {
     }
 
     fn is_barrier(&self, p: Point) -> bool {
-        self.objs(p).any(|(_, x)| matches!(x, Obj::Wall | Obj::Door(Door { locked: Some(_), .. })))
+        self.objs(p).any(|(_, x)| matches!(x, ObjData::Wall | ObjData::Door(Door { locked: Some(_), .. })))
     }
 
     pub fn step(&mut self) {
         struct NpcMove {
-            id: Id<WorldObj>,
+            id: Obj,
             from: Point,
             to: Option<Point>,
             ai: &'static dyn Ai,
@@ -289,11 +310,11 @@ impl World {
         }
         let mut npcs = self.objs.items().iter()
             .filter_map(|(id, obj)|
-                if let WorldObj { obj: Obj::Npc(npc), bounds } = obj {
+                if let ObjNode { data: ObjData::Npc(npc), bounds } = obj {
                     let movement_order = i8::MAX.wrapping_sub(npc.movement_priority) as u8;
                     let movement_order = ((movement_order as u16) << 8) | (self.rng.gen::<u8>() as u16);
                     Some(NpcMove {
-                        id,
+                        id: Obj(id),
                         from: bounds.tl,
                         ai: npc.ai,
                         to: None,
@@ -306,7 +327,7 @@ impl World {
             )
             .collect::<Vec<_>>();
         for npc in &mut npcs {
-            let ai_data = if let Obj::Npc(npc) = &mut self.objs[npc.id].obj {
+            let ai_data = if let ObjData::Npc(npc) = &mut self.objs[npc.id.0].data {
                 npc.ai_data.as_mut()
             } else {
                 unreachable!()
@@ -318,11 +339,11 @@ impl World {
         }
         for npc in &mut npcs {
             if let Some(to) = npc.to {
-                let to_barrier = self.objs(to).find(|(_, x)| matches!(x, Obj::Wall | Obj::Door(_)));
+                let to_barrier = self.objs(to).find(|(_, x)| matches!(x, ObjData::Wall | ObjData::Door(_)));
                 if let Some((to_barrier, _)) = to_barrier {
-                    match &mut self.objs[to_barrier].obj {
-                        Obj::Wall => npc.to = None,
-                        Obj::Door(door) => {
+                    match &mut self.objs[to_barrier.0].data {
+                        ObjData::Wall => npc.to = None,
+                        ObjData::Door(door) => {
                             let open = if let Some(locked) = door.locked {
                                 if locked.get() != 0 {
                                     npc.to = None;
@@ -343,12 +364,12 @@ impl World {
         npcs.sort_by_key(|x| x.movement_order);
         for npc in npcs {
             if let Some(to) = npc.to {
-                if self.objs(to).any(|(_, x)| matches!(x, Obj::Npc(_))) { continue; }
+                if self.objs(to).any(|(_, x)| matches!(x, ObjData::Npc(_))) { continue; }
                 if npc.wants_close_door {
-                    let from_door = self.objs(npc.from).find(|(_, x)| matches!(x, Obj::Door(_))).map(|x| x.0);
+                    let from_door = self.objs(npc.from).find(|(_, x)| matches!(x, ObjData::Door(_))).map(|x| x.0);
                     if let Some(from_door) = from_door {
-                        match &mut self.objs[from_door].obj {
-                            Obj::Door(door) => {
+                        match &mut self.objs[from_door.0].data {
+                            ObjData::Door(door) => {
                                 if door.locked.is_none() {
                                     door.locked = Some(unsafe { NonMaxU8::new_unchecked(0) });
                                 }
@@ -357,7 +378,10 @@ impl World {
                         }
                     }
                 }
-                self.objs[npc.id].bounds.tl = to;
+                let new_bounds = Rect { tl: to, size: Vector { x: 1, y: 1 } };
+                let old_bounds = replace(&mut self.objs[npc.id.0].bounds, new_bounds);
+                self.remove_raw(old_bounds, npc.id);
+                self.add_raw(new_bounds, npc.id);
             }
         }
     }
@@ -372,14 +396,14 @@ impl World {
             let mut vis_npc = None;
             for (_, obj) in self.objs(p) {
                 match obj {
-                    Obj::Roof => roof = true,
-                    Obj::Wall => wall = true,
-                    Obj::Door(door_obj) => {
+                    ObjData::Roof => roof = true,
+                    ObjData::Wall => wall = true,
+                    ObjData::Door(door_obj) => {
                         door = true;
                         vis_obj = Some(CellObj::Door { locked: door_obj.locked.map(|x| x.get() != 0) });
                     },
-                    Obj::Chest(chest) => vis_obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
-                    Obj::Npc(npc) => vis_npc = Some(CellNpc {
+                    ObjData::Chest(chest) => vis_obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
+                    ObjData::Npc(npc) => vis_npc = Some(CellNpc {
                         player: p == player,
                         race: npc.race,
                         gender: npc.gender,
