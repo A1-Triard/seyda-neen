@@ -315,6 +315,7 @@ fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: 
     world.add(bounds.t_line(), ObjData::Wall);
     world.add(bounds.r_line(), ObjData::Wall);
     world.add(bounds.b_line(), ObjData::Wall);
+    world.add(Thickness::all(1).shrink_rect(bounds), ObjData::Roof);
     world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
         locked: Some(unsafe { NonMaxU8::new_unchecked(0) }),
         key: 0

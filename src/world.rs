@@ -343,25 +343,36 @@ impl World {
         }
         for npc in &mut npcs {
             if let Some(to) = npc.to {
-                let to_barrier = self.objs(to).find(|(_, x)| matches!(x, ObjData::Wall | ObjData::Door(_)));
-                if let Some((to_barrier, _)) = to_barrier {
-                    match &mut self.objs[to_barrier.0].data {
-                        ObjData::Wall => npc.to = None,
+                let mut wall = false;
+                let mut door = None;
+                for (obj, obj_data) in self.objs(to) {
+                    match obj_data {
+                        ObjData::Wall => wall = true,
+                        ObjData::Door(_) => {
+                            door = Some(obj);
+                            break;
+                        }
+                        _ => { },
+                    }
+                }
+                let deny = if let Some(door) = door {
+                    match &mut self.objs[door.0].data {
                         ObjData::Door(door) => {
                             let open = if let Some(locked) = door.locked {
-                                if locked.get() != 0 {
-                                    npc.to = None;
-                                    false
-                                } else {
-                                    true
-                                }
+                                Some(locked.get() == 0)
                             } else {
-                                false
+                                None
                             };
-                            if open { door.locked = None; }
+                            if open.unwrap_or(false) { door.locked = None; }
+                            open.map_or(false, |x| !x)
                         },
                         _ => unreachable!(),
                     }
+                } else {
+                    wall
+                };
+                if deny { 
+                    npc.to = None;
                 }
             }
         }
