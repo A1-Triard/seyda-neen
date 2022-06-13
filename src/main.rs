@@ -238,24 +238,6 @@ fn map_bounds(game: &Game, screen_size: Vector) -> Rect {
     margin.shrink_rect(Rect { tl: Point { x: 0, y: 0 }, size: screen_size })
 }
 
-macro_rules! nz {
-    (
-        0
-    ) => {
-        compile_error!("zero");
-    };
-    (
-        0u8
-    ) => {
-        compile_error!("zero");
-    };
-    (
-        $v:literal
-    ) => {
-        (unsafe { NonZeroU8::new_unchecked($v) })
-    };
-}
-
 struct PlayerData {
     desired_movement_direction: Option<Direction>,
     wants_close_door: bool,
@@ -308,7 +290,43 @@ fn door_offset(w: NonZeroU8, h: NonZeroU8, door: u16) -> Vector {
     }
 }
 
-fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16) {
+macro_rules! nz {
+    (
+        0
+    ) => {
+        compile_error!("zero");
+    };
+    (
+        0u8
+    ) => {
+        compile_error!("zero");
+    };
+    (
+        $v:literal
+    ) => {
+        (unsafe { NonZeroU8::new_unchecked($v) })
+    };
+}
+
+macro_rules! nm {
+    (
+        255
+    ) => {
+        compile_error!("max");
+    };
+    (
+        255u8
+    ) => {
+        compile_error!("max");
+    };
+    (
+        $v:literal
+    ) => {
+        (unsafe { NonMaxU8::new_unchecked($v) })
+    };
+}
+
+fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16, locked: NonMaxU8) {
     let door = tl.offset(door_offset(w, h, door));
     let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
     world.add(bounds.l_line(), ObjData::Wall);
@@ -317,7 +335,7 @@ fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: 
     world.add(bounds.b_line(), ObjData::Wall);
     world.add(Thickness::all(1).shrink_rect(bounds), ObjData::Roof);
     world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
-        locked: Some(unsafe { NonMaxU8::new_unchecked(0) }),
+        locked: Some(locked),
         key: 0
     }));
 }
@@ -336,9 +354,9 @@ fn main(_: isize, _: *const *const u8) -> isize {
         }),
         movement_priority: 0,
     });
-    add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14);
-    add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2);
-    add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28);
+    add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14, nm!(0));
+    add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2, nm!(1));
+    add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
