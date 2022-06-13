@@ -392,31 +392,31 @@ impl World {
             let mut wall = false;
             let mut door = false;
             let mut roof = false;
-            let mut vis_obj = None;
-            let mut vis_npc = None;
-            for (_, obj) in self.objs(p) {
-                match obj {
+            let mut obj = None;
+            let mut npc = None;
+            for (_, obj_data) in self.objs(p) {
+                match obj_data {
                     ObjData::Roof => roof = true,
                     ObjData::Wall => wall = true,
-                    ObjData::Door(door_obj) => {
+                    ObjData::Door(door_data) => {
                         door = true;
-                        vis_obj = Some(CellObj::Door { locked: door_obj.locked.map(|x| x.get() != 0) });
+                        obj = Some(CellObj::Door { locked: door_data.locked.map(|x| x.get() != 0) });
                     },
-                    ObjData::Chest(chest) => vis_obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
-                    ObjData::Npc(npc) => vis_npc = Some(CellNpc {
+                    ObjData::Chest(chest) => obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
+                    ObjData::Npc(npc_data) => npc = Some(CellNpc {
                         player: p == player,
-                        race: npc.race,
-                        gender: npc.gender,
-                        class: npc.class
+                        race: npc_data.race,
+                        gender: npc_data.gender,
+                        class: npc_data.class
                     }),
                 }
             }
-            area[p] = if wall {
+            area[p] = if wall && !door {
                 Cell::Wall
             } else if !self.is_visible_from(player, p) {
-                if door { Cell::Wall } else { Cell::Invis { roof } }
+                if door || wall { Cell::Wall } else { Cell::Invis { roof } }
             } else {
-                Cell::Vis { obj: vis_obj, npc: vis_npc }
+                Cell::Vis { obj, npc }
             };
         }
     }
