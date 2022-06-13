@@ -300,7 +300,19 @@ impl World {
     }
 
     fn is_barrier(&self, p: Point) -> bool {
-        self.objs(p).any(|(_, x)| matches!(x, ObjData::Wall | ObjData::Door(Door { locked: Some(_), .. })))
+        let mut wall = false;
+        let mut door_closed = None;
+        for (_, obj_data) in self.objs(p) {
+            match obj_data {
+                ObjData::Wall => wall = true,
+                ObjData::Door(Door { locked, .. }) => {
+                    door_closed = Some(locked.is_some());
+                    break;
+                }
+                _ => { },
+            }
+        }
+        door_closed.unwrap_or(wall)
     }
 
     pub fn step(&mut self) {
