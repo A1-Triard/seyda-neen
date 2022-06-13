@@ -21,6 +21,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
 
 [[package]]
+name = "cfg-if"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
+
+[[package]]
 name = "components-arena"
 version = "3.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -128,6 +134,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b68c8c0cd22a26e4524fa3847c0bb2368a824c6d10e40b10b26f88516d7ed8b"
 
 [[package]]
+name = "getrandom"
+version = "0.2.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9be70c98951c83b8d2f8f60d7065fa6d5146873094452a1008da8c2f1e4205ad"
+dependencies = [
+ "cfg-if",
+ "libc",
+ "wasi",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +155,12 @@ name = "macro-attr-2018"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "66fbbf2d3635c91b436074cf14a7c8948dc608e193c9d2b389bdc64aae2ca37b"
+
+[[package]]
+name = "nonmax"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "287a6d20c39e398d0046fd7809c83fd3a12d42a3a0f4612f5028a8f5b5c4d0ce"
 
 [[package]]
 name = "num-bigint"
@@ -222,6 +245,9 @@ name = "rand_core"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d34f1408f55294453790c48b2f1ebbb1c5b4b7563eb1f418bcfcfdbb06ebb4e7"
+dependencies = [
+ "getrandom",
+]
 
 [[package]]
 name = "rustc_version"
@@ -248,7 +274,9 @@ dependencies = [
  "either",
  "exit-no-std",
  "macro-attr-2018",
+ "nonmax",
  "panicking",
+ "rand",
  "tuifw-screen",
  "tuifw-window",
 ]
@@ -344,6 +372,12 @@ name = "unicode-width"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ed742d4ea2bd1176e236172c8429aaf54486e7ac098db29ffe6529e0ce50973"
+
+[[package]]
+name = "wasi"
+version = "0.10.2+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd6fbd9a79829dd1ad0cc20627bf1ed606756a7f77edff7b66b7064f9cb327c6"
 
 [[package]]
 name = "widestring"

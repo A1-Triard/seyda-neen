@@ -1,4 +1,5 @@
 #![deny(warnings)]
+#![allow(dead_code)]
 
 #![feature(default_alloc_error_handler)]
 #![feature(extern_types)]
@@ -35,11 +36,14 @@ extern fn rust_eh_unregister_frames () { }
 mod world;
 use world::*;
 
+use alloc::boxed::Box;
 use components_arena::{Arena, Component, Id};
+use core::any::Any;
 use core::cmp::{max, min};
 use core::num::NonZeroU8;
 use educe::Educe;
 use macro_attr_2018::macro_attr;
+use nonmax::NonMaxU8;
 use tuifw_screen::{self, HAlign, VAlign, Attr, Color, Event};
 use tuifw_screen::{Key, Point, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
@@ -121,23 +125,56 @@ fn render_map(
         let v = p.offset_from(player);
         if norm_x_2(v) + 1 > 2 * game.visibility as u32 { continue; }
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
-        let (fg, attr, ch) = match visible_area[p] {
-            Cell { player: true, .. } => (Color::Blue, Attr::empty(), "@"),
-            Cell { wall: Wall::None, is_visible: false, .. } => (Color::White, Attr::empty(), "·"),
-            Cell { wall: Wall::None, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
-            Cell { wall: Wall::Roof, is_visible: false, .. } => {
-                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
-                let ch = if matches!(r, Wall::Roof) { "░░" } else { "░" };
+        let (fg, attr, ch) = match &visible_area[p] {
+            Cell::Wall => {
+                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+                let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+                let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+                let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
+                let l = matches!(l, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
+                let u = matches!(u, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
+                let r = if matches!(r, Cell::Wall) {
+                    0
+                } else if matches!(r, Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) {
+                    1
+                } else {
+                    2
+                };
+                let d = matches!(d, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }) as u8;
+                let index = (r << 3) | (l << 2) | (u << 1) | d;
+                let ch = [
+                    "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
+                    "─", "┌", "└", "├", "─", "┬", "┴", "┼",
+                    "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
+                ][index as usize];
                 (Color::White, Attr::empty(), ch)
             },
-            Cell { wall: Wall::Roof, is_visible: true, .. } => (Color::White, Attr::INTENSITY, "∙"),
-            Cell { wall: Wall::Door { opened }, .. } => {
+            Cell::Invis { roof: true } => {
+                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+                let ch = if matches!(r, Cell::Invis { roof: true }) { "░░" } else { "░" };
+                (Color::White, Attr::empty(), ch)
+            },
+            Cell::Vis { npc: Some(npc), .. } => {
+                if npc.player {
+                    (Color::Blue, Attr::empty(), "@")
+                } else {
+                    (Color::Green, Attr::empty(), "C")
+                }
+            },
+            Cell::Invis { roof: false } => (Color::White, Attr::empty(), "·"),
+            Cell::Vis { obj: None, .. } => (Color::White, Attr::INTENSITY, "∙"),
+            Cell::Vis { obj: Some(CellObj::Door { locked }), .. } => {
+                let opened = locked.is_none();
+                let locked = locked.map_or(false, |x| x);
                 let horizontal = opened ^ {
-                    let h1 = !visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall.is_none();
+                    let h1 = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+                    let h1 = matches!(h1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
                     if !h1 {
-                        let v1 = !visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall.is_none();
+                        let v1 = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+                        let v1 = matches!(v1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
                         if !v1 {
-                            !visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall.is_none()
+                            let h2 = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+                            matches!(h2, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. })
                         } else {
                             false
                         }
@@ -145,31 +182,17 @@ fn render_map(
                         true
                     }
                 };
-                (Color::Green, Attr::empty(), if horizontal { "─" } else { "|" })
+                (
+                    if locked { Color::Red } else { Color::Green },
+                    Attr::empty(),
+                    if horizontal { "─" } else { "|" }
+                )
             },
-            Cell { wall: Wall::Wall, .. } => {
-                let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }].wall;
-                let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }].wall;
-                let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }].wall;
-                let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }].wall;
-                let l = !l.is_none() as u8;
-                let u = !u.is_none() as u8;
-                let r = if matches!(r, Wall::None | Wall::Roof) {
-                    0
-                } else if matches!(r, Wall::Door { .. }) {
-                    1
-                } else {
-                    2
-                };
-                let d = !d.is_none() as u8;
-                let index = (r << 3) | (l << 2) | (u << 1) | d;
-                let ch = [
-                    "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
-                    "─", "┌", "└", "├", "─", "┬", "┴", "┼",
-                    "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
-                ][index as usize];
-                (Color::White, Attr::empty(), ch)
-            },
+            Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
+                if *locked { Color::Red } else { Color::Green },
+                Attr::empty(),
+                "■"
+            ),
         };
         port.out(v, fg, BG, attr, ch);
     }
@@ -205,13 +228,88 @@ macro_rules! nz {
     };
 }
 
+struct PlayerData {
+    desired_movement_direction: Option<Direction>,
+    wants_close_door: bool,
+}
+
+struct Player;
+
+const PLAYER: Player = Player;
+
+impl Ai for Player {
+    fn desired_movement_direction(&self, data: &mut dyn Any) -> Option<Direction> {
+        let data = data.downcast_mut::<PlayerData>().unwrap();
+        data.desired_movement_direction
+    }
+
+    fn wants_close_door(&self, data: &mut dyn Any) -> bool {
+        let data = data.downcast_mut::<PlayerData>().unwrap();
+        data.wants_close_door
+    }
+}
+
+fn door_offset(w: NonZeroU8, h: NonZeroU8, door: u16) -> Vector {
+    let door = door % (2 * w.get() as u16 + 2 * h.get() as u16);
+    if door < h.get() as u16 {
+        Vector {
+            x: 0,
+            y: door as i16
+        }
+    } else if door < h.get() as u16 + w.get() as u16 {
+        Vector {
+            x: (door - h.get() as u16) as i16,
+            y: (h.get() - 1) as u16 as i16
+        }
+    } else if door < 2 * h.get() as u16 + w.get() as u16 {
+        Vector {
+            x: (w.get() - 1) as u16 as i16, 
+            y: (
+                (h.get() - 1) as u16 -
+                (door - h.get() as u16 - w.get() as u16)
+            ) as i16
+        }
+    } else {
+        Vector {
+            x: (
+                (w.get() - 1) as u16 -
+                (door - 2 * h.get() as u16 - w.get() as u16)
+            ) as i16,
+            y: 0
+        }
+    }
+}
+
+fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16) {
+    let door = tl.offset(door_offset(w, h, door));
+    let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
+    world.add(bounds.l_line(), Obj::Wall);
+    world.add(bounds.t_line(), Obj::Wall);
+    world.add(bounds.r_line(), Obj::Wall);
+    world.add(bounds.b_line(), Obj::Wall);
+    world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, Obj::Door(Door {
+        locked: Some(unsafe { NonMaxU8::new_unchecked(0) }),
+        key: 0
+    }));
+}
+
 #[start]
 fn main(_: isize, _: *const *const u8) -> isize {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
-    let mut world = World::new();
-    world.add_building(Point { x: -5, y: 0 }, nz!(5), nz!(7), 14);
-    world.add_building(Point { x: 4, y: 1 }, nz!(5), nz!(7), 2);
-    world.add_building(Point { x: -2, y: 11 }, nz!(12), nz!(7), 28);
+    let mut world = World::new(Npc {
+        race: Race::Danmer,
+        gender: Gender::Female,
+        class: NpcClass::Mercenery,
+        ai: &PLAYER,
+        ai_data: Box::new(PlayerData {
+            desired_movement_direction: None,
+            wants_close_door: false
+        }),
+        movement_priority: 0,
+    });
+    add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14);
+    add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2);
+    add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28);
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
@@ -226,16 +324,22 @@ fn main(_: isize, _: *const *const u8) -> isize {
                 break event;
             }
         };
-        let step = match event {
+        let movement = match event {
             Event::Key(_, Key::Escape) => break,
-            Event::Key(n, Key::Right) => Vector { x: (n.get() as i16), y: 0 },
-            Event::Key(n, Key::Left) => Vector { x: (n.get() as i16).wrapping_neg(), y: 0 },
-            Event::Key(n, Key::Up) => Vector { y: (n.get() as i16).wrapping_neg(), x: 0 },
-            Event::Key(n, Key::Down) => Vector { y: n.get() as i16, x: 0 },
-            _ => Vector { x: 0, y: 0 },
+            Event::Key(n, Key::Right) => Some((n, Direction::E)),
+            Event::Key(n, Key::Left) => Some((n, Direction::W)),
+            Event::Key(n, Key::Up) => Some((n, Direction::N)),
+            Event::Key(n, Key::Down) => Some((n, Direction::S)),
+            _ => None,
         };
-        game.world.move_player(game.world.player().offset(step));
-        game.windows[map].window.invalidate(&mut windows);
+        if let Some((n, direction)) = movement {
+            let player_data = game.world.player_data_mut().downcast_mut::<PlayerData>().unwrap();
+            player_data.desired_movement_direction = Some(direction);
+            for _ in 0 .. n.get() {
+                game.world.step();
+            }
+            game.windows[map].window.invalidate(&mut windows);
+        }
     }
     0
 }
