@@ -151,7 +151,7 @@ fn render_map(
             Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
                 if *locked { Color::Red } else { Color::Green },
                 Attr::empty(),
-                "■"
+                "▬"
             ),
         };
         port.out(v, fg, BG, attr, ch);
@@ -357,6 +357,10 @@ fn main(_: isize, _: *const *const u8) -> isize {
     add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14, nm!(0));
     add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2, nm!(1));
     add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
+    world.add(Rect { tl: Point { x: -4, y: 1 }, size: Vector { x: 1, y: 1 } }, ObjData::Chest(Chest {
+        locked: nm!(0),
+        key: 0,
+    }));
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
