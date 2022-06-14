@@ -539,14 +539,20 @@ impl World {
                 }
             }
             let uncovered_wall = wall_outer.map_or(false, |wall_outer|
-                door_was_closed.is_none() && (!roof || wall_outer)
+                door_was_closed.is_none() && (!roof || wall_outer || is_visible)
             );
             area[p] = if uncovered_wall {
                 Cell::Wall
             } else if is_visible {
                 Cell::Vis { obj, npc }
             } else if roof && !wall_outer.unwrap_or(false) {
-                Cell::Roof
+                Cell::Roof(if door_was_closed.is_some() {
+                    CellRoof::Door
+                } else if wall_outer.is_some() {
+                    CellRoof::Wall
+                } else {
+                    CellRoof::None
+                })
             } else if let Some(door_was_closed) = door_was_closed {
                 Cell::InvisDoor { closed: door_was_closed }
             } else if wall_outer.is_some() {
@@ -614,9 +620,14 @@ pub enum CellObj {
 }
 
 #[derive(Debug, Clone)]
+pub enum CellRoof {
+    None, Door, Wall
+}
+
+#[derive(Debug, Clone)]
 pub enum Cell {
     None,
-    Roof,
+    Roof(CellRoof),
     InvisDoor { closed: bool },
     Wall,
     Vis { obj: Option<CellObj>, npc: Option<CellNpc> },

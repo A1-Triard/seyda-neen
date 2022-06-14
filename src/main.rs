@@ -139,9 +139,9 @@ fn render_map(
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match &visible_area[p] {
             Cell::Wall => render_wall(&visible_area, p),
-            Cell::Roof => {
+            Cell::Roof(_) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let ch = if matches!(r, Cell::Roof) { "░░" } else { "░" };
+                let ch = if matches!(r, Cell::Roof(_)) { "░░" } else { "░" };
                 (Color::White, Attr::empty(), ch)
             },
             Cell::Vis { npc: Some(npc), .. } => {
@@ -181,29 +181,52 @@ fn is_door(cell: &Cell) -> bool {
     )
 }
 
+fn is_wall_under_roof(cell: &Cell) -> bool {
+    matches!(cell, Cell::Roof(CellRoof::Wall))
+}
+
+fn is_door_under_roof(cell: &Cell) -> bool {
+    matches!( cell, Cell::Roof(CellRoof::Door))
+}
+
 fn render_wall(
     visible_area: &VisibleArea,
     p: Point,
 ) -> (Color, Attr, &'static str) {
-    let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-    let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-    let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-    let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
-    let l = (is_wall(l) || is_door(l)) as u8;
-    let u = (is_wall(u) || is_door(u)) as u8;
-    let r = if is_wall(r) {
-        0
-    } else if is_door(r) {
+    let r_cell = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+    let d_cell = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+    let l_cell = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+    let u_cell = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
+    let l = (is_wall(l_cell) || is_door(l_cell)) as u8;
+    let u = (is_wall(u_cell) || is_door(u_cell)) as u8;
+    let r = if is_wall(r_cell) {
+        2
+    } else if is_door(r_cell) {
         1
     } else {
-        2
+        0
     };
-    let d = (is_wall(d) || is_door(d)) as u8;
+    let d = (is_wall(d_cell) || is_door(d_cell)) as u8;
     let index = (r << 3) | (l << 2) | (u << 1) | d;
+    let index = if index == 0 {
+        let l = (is_wall_under_roof(l_cell) || is_door_under_roof(l_cell)) as u8;
+        let u = (is_wall_under_roof(u_cell) || is_door_under_roof(u_cell)) as u8;
+        let r = if is_wall_under_roof(r_cell) {
+            2
+        } else if is_door_under_roof(r_cell) {
+            1
+        } else {
+            0
+        };
+        let d = (is_wall_under_roof(d_cell) || is_door_under_roof(d_cell)) as u8;
+        (r << 3) | (l << 2) | (u << 1) | d
+    } else {
+        index
+    };
     let ch = [
-        "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
-        "─", "┌", "└", "├", "─", "┬", "┴", "┼",
         "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
+        "─", "┌", "└", "├", "─", "┬", "┴", "┼",
+        "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
     ][index as usize];
     (Color::White, Attr::empty(), ch)
 }

@@ -58,7 +58,7 @@ pub fn add_imperial_office(world: &mut World) {
     v_wall(-2, 13, 13, true, world);
     v_wall(-2, 15, 17, true, world);
     door(-2, 14, world);
-    h_wall(-6, -5, 13, false, world);
+    h_wall(-7, -5, 13, false, world);
     h_wall(-4, -3, 13, true, world);
     h_wall(-8, -3, 15, true, world);
     v_wall(-4, 9, 13, true, world);
