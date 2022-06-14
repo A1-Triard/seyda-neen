@@ -66,6 +66,6 @@ pub fn add_imperial_office(world: &mut World) {
     v_wall(-9, 9, 15, true, world);
     door(-7, 9, world);
     roof(-2, 5, 12, 18, roof_group, world);
-    roof(-4, -3, 14, 15, roof_group, world);
+    roof(-4, -3, 13, 15, roof_group, world);
     roof(-9, -4, 9, 15, roof_group, world);
 }
