@@ -445,6 +445,12 @@ fn main(_: isize, _: *const *const u8) -> isize {
                 game.windows[status].window.invalidate(&mut windows);
                 game.windows[map].window.invalidate(&mut windows);
             },
+            Event::Key(n, Key::Char('c')) if n.get() % 2 != 0 => {
+                let close_doors = !game.close_doors;
+                game.close_doors = close_doors;
+                game.world.player_data_mut::<PlayerData>().wants_close_door = close_doors;
+                game.windows[status].window.invalidate(&mut windows);
+            },
             _ => { }
         }
         let movement = match event {
