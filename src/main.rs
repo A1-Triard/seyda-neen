@@ -127,9 +127,9 @@ fn render_map(
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match &visible_area[p] {
             Cell::Wall => render_wall(&visible_area, p),
-            Cell::Invis(CellInvis::Roof) => {
+            Cell::Roof => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let ch = if matches!(r, Cell::Invis(CellInvis::Roof)) { "░░" } else { "░" };
+                let ch = if matches!(r, Cell::Roof) { "░░" } else { "░" };
                 (Color::White, Attr::empty(), ch)
             },
             Cell::Vis { npc: Some(npc), .. } => {
@@ -139,14 +139,14 @@ fn render_map(
                     (Color::Green, Attr::empty(), "C")
                 }
             },
-            Cell::Invis(CellInvis::None) => (Color::White, Attr::empty(), "·"),
+            Cell::None => (Color::White, Attr::empty(), "·"),
             Cell::Vis { obj: None, .. } => (Color::White, Attr::INTENSITY, "∙"),
             Cell::Vis { obj: Some(CellObj::Door { locked }), .. } => {
                 let closed = locked.is_some();
                 let locked = locked.map_or(false, |x| x);
                 render_door(&visible_area, p, closed, Some(locked))
             },
-            &Cell::Invis(CellInvis::Door { closed }) =>
+            &Cell::InvisDoor { closed } =>
                 render_door(&visible_area, p, closed, None),
             Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
                 if *locked { Color::Red } else { Color::Green },
@@ -165,7 +165,7 @@ fn is_wall(cell: &Cell) -> bool {
 fn is_door(cell: &Cell) -> bool {
     matches!(
         cell,
-        Cell::Invis(CellInvis::Door { .. }) | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
+        Cell::InvisDoor { .. } | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
     )
 }
 
@@ -327,13 +327,14 @@ macro_rules! nm {
 }
 
 fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16, locked: NonMaxU8) {
+    let roof_group = world.add_group();
     let door = tl.offset(door_offset(w, h, door));
     let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
     world.add_obj(None, bounds.l_line(), ObjData::Wall);
     world.add_obj(None, bounds.t_line(), ObjData::Wall);
     world.add_obj(None, bounds.r_line(), ObjData::Wall);
     world.add_obj(None, bounds.b_line(), ObjData::Wall);
-    world.add_obj(None, Thickness::all(1).shrink_rect(bounds), ObjData::Roof);
+    world.add_obj(Some(roof_group), bounds, ObjData::Roof);
     world.add_obj(None, Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
         locked: Some(locked),
         key: 0

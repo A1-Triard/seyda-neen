@@ -107,10 +107,31 @@ pub enum ObjData {
     Roof,
 }
 
+impl ObjData {
+    fn into_rt(self) -> ObjRt {
+        match self {
+            ObjData::Door(d) => ObjRt::Door { d, was_closed: true },
+            ObjData::Chest(d) => ObjRt::Chest(d),
+            ObjData::Npc(d) => ObjRt::Npc(d),
+            ObjData::Wall => ObjRt::Wall,
+            ObjData::Roof => ObjRt::Roof,
+        }
+    }
+}
+
+#[derive(Debug)]
+enum ObjRt {
+    Door { d: Door, was_closed: bool },
+    Chest(Chest),
+    Npc(Npc),
+    Wall,
+    Roof,
+}
+
 macro_attr! {
     #[derive(Debug, Component!)]
     struct ObjNode {
-        data: ObjData,
+        data: ObjRt,
         bounds: Rect,
         group: Option<Group>,
     }
@@ -202,7 +223,7 @@ impl World {
     pub fn new(player: Npc) -> Self {
         let mut objs = Arena::new();
         let player = objs.insert(|id| (ObjNode {
-            data: ObjData::Npc(player),
+            data: ObjRt::Npc(player),
             bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: 1, y: 1 } },
             group: None,
         }, Obj(id)));
@@ -251,7 +272,7 @@ impl World {
 
     pub fn player_data_mut<T: Any>(&mut self) -> &mut T {
         match &mut self.objs[self.player.0].data {
-            ObjData::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
+            ObjRt::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
             _ => unreachable!()
         }
     }
@@ -277,7 +298,7 @@ impl World {
 
     pub fn add_obj(&mut self, group: Option<Group>, bounds: Rect, data: ObjData) -> Obj {
         let obj = self.objs.insert(|id|
-            (ObjNode { bounds, data, group }, Obj(id))
+            (ObjNode { bounds, data: data.into_rt(), group }, Obj(id))
         );
         if let Some(group) = group {
             self.groups[group.0].objs.push(obj);
@@ -334,11 +355,12 @@ impl World {
         (id, unsafe { &mut *obj })
     }
 
-    fn objs(&self, p: Point) -> impl Iterator<Item=(Obj, &ObjData)> {
+    fn objs(&self, p: Point) -> impl Iterator<Item=(Obj, Option<Group>, &ObjRt)> {
         self.sector(p).1.iter().filter_map(move |&obj| {
             let obj_node = &self.objs[obj.0];
             if obj_node.bounds.contains(p) {
-                Some((obj, &obj_node.data))
+                let group = obj_node.group;
+                Some((obj, group, &obj_node.data))
             } else {
                 None
             }
@@ -348,10 +370,10 @@ impl World {
     fn is_barrier(&self, p: Point) -> bool {
         let mut wall = false;
         let mut door_closed = None;
-        for (_, obj_data) in self.objs(p) {
-            match obj_data {
-                ObjData::Wall => wall = true,
-                ObjData::Door(Door { locked, .. }) => {
+        for (_, _, obj_rt) in self.objs(p) {
+            match obj_rt {
+                ObjRt::Wall => wall = true,
+                ObjRt::Door { d: Door { locked, .. }, .. } => {
                     door_closed = Some(locked.is_some());
                     break;
                 }
@@ -372,7 +394,7 @@ impl World {
         }
         let mut npcs = self.objs.items().iter()
             .filter_map(|(id, obj)|
-                if let ObjNode { data: ObjData::Npc(npc), bounds, .. } = obj {
+                if let ObjNode { data: ObjRt::Npc(npc), bounds, .. } = obj {
                     let movement_order = i8::MAX.wrapping_sub(npc.movement_priority) as u8;
                     let movement_order = ((movement_order as u16) << 8) | (self.rng.gen::<u8>() as u16);
                     Some(NpcMove {
@@ -389,7 +411,7 @@ impl World {
             )
             .collect::<Vec<_>>();
         for npc in &mut npcs {
-            let ai_data = if let ObjData::Npc(npc) = &mut self.objs[npc.id.0].data {
+            let ai_data = if let ObjRt::Npc(npc) = &mut self.objs[npc.id.0].data {
                 npc.ai_data.as_mut()
             } else {
                 unreachable!()
@@ -403,10 +425,10 @@ impl World {
             if let Some(to) = npc.to {
                 let mut wall = false;
                 let mut door = None;
-                for (obj, obj_data) in self.objs(to) {
-                    match obj_data {
-                        ObjData::Wall => wall = true,
-                        ObjData::Door(_) => {
+                for (obj, _, obj_rt) in self.objs(to) {
+                    match obj_rt {
+                        ObjRt::Wall => wall = true,
+                        ObjRt::Door { .. } => {
                             door = Some(obj);
                             break;
                         }
@@ -415,7 +437,7 @@ impl World {
                 }
                 let deny = if let Some(door) = door {
                     match &mut self.objs[door.0].data {
-                        ObjData::Door(door) => {
+                        ObjRt::Door { d: door, .. } => {
                             let open = if let Some(locked) = door.locked {
                                 Some(locked.get() == 0)
                             } else {
@@ -437,12 +459,14 @@ impl World {
         npcs.sort_by_key(|x| x.movement_order);
         for npc in npcs {
             if let Some(to) = npc.to {
-                if self.objs(to).any(|(_, x)| matches!(x, ObjData::Npc(_))) { continue; }
+                if self.objs(to).any(|(_, _, x)| matches!(x, ObjRt::Npc(_))) { continue; }
                 if npc.wants_close_door {
-                    let from_door = self.objs(npc.from).find(|(_, x)| matches!(x, ObjData::Door(_))).map(|x| x.0);
+                    let from_door = self.objs(npc.from)
+                        .find(|(_, _, x)| matches!(x, ObjRt::Door { .. }))
+                        .map(|x| x.0);
                     if let Some(from_door) = from_door {
                         match &mut self.objs[from_door.0].data {
-                            ObjData::Door(door) => {
+                            ObjRt::Door { d: door, .. } => {
                                 if door.locked.is_none() {
                                     door.locked = Some(unsafe { NonMaxU8::new_unchecked(0) });
                                 }
@@ -459,58 +483,76 @@ impl World {
         }
     }
 
-    pub fn render(&self, area: &mut VisibleArea) {
+    pub fn render(&mut self, area: &mut VisibleArea) {
         let player = self.player();
-        for p in area.bounds().points() {
-            area.index_raw_mut(p).1 = 2 * self.is_visible_from(player, p) as u8;
+        let mut roof_group = None;
+        for (_, group, obj_rt) in self.objs(player) {
+            match obj_rt {
+                ObjRt::Roof => {
+                    roof_group = group;
+                    break;
+                },
+                _ => { },
+            }
         }
-        for p in Thickness::all(1).shrink_rect(area.bounds()).points() {
-            if area.index_raw(p).1 == 0 {
-                for direction in Direction::iter_variants() {
-                    if area.index_raw(p.offset(direction.vector())).1 == 2 {
-                        area.index_raw_mut(p).1 = 1;
-                        break;
+        for p in area.bounds().points() {
+            let is_visible = self.is_visible_from(player, p);
+            area.index_raw_mut(p).1 = 2 * is_visible as u8;
+            if is_visible {
+                let mut door = None;
+                for (obj, _, obj_rt) in self.objs(p) {
+                    match obj_rt {
+                        ObjRt::Door { .. } => {
+                            door = Some(obj);
+                            break;
+                        }
+                        _ => { }
+                    }
+                }
+                if let Some(door) = door {
+                    if let ObjRt::Door { d, was_closed } = &mut self.objs[door.0].data {
+                        *was_closed = d.locked.is_some();
+                    } else {
+                        unreachable!();
                     }
                 }
             }
         }
         for p in area.bounds().points() {
             let mut wall = false;
-            let mut door_closed = None;
+            let mut door_was_closed = None;
             let mut roof = false;
             let mut obj = None;
             let mut npc = None;
-            for (_, obj_data) in self.objs(p) {
-                match obj_data {
-                    ObjData::Roof => roof = true,
-                    ObjData::Wall => wall = true,
-                    ObjData::Door(door_data) => {
+            for (_, group, obj_rt) in self.objs(p) {
+                match obj_rt {
+                    ObjRt::Roof => if group != roof_group { roof = true; },
+                    ObjRt::Wall => wall = true,
+                    &ObjRt::Door { ref d, was_closed } => {
                         wall = true;
-                        door_closed = Some(door_data.locked.is_some());
-                        obj = Some(CellObj::Door { locked: door_data.locked.map(|x| x.get() != 0) });
+                        door_was_closed = Some(was_closed);
+                        obj = Some(CellObj::Door { locked: d.locked.map(|x| x.get() != 0) });
                     },
-                    ObjData::Chest(chest) => obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
-                    ObjData::Npc(npc_data) => npc = Some(CellNpc {
+                    ObjRt::Chest(chest) => obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
+                    ObjRt::Npc(npc_rt) => npc = Some(CellNpc {
                         player: p == player,
-                        race: npc_data.race,
-                        gender: npc_data.gender,
-                        class: npc_data.class
+                        race: npc_rt.race,
+                        gender: npc_rt.gender,
+                        class: npc_rt.class
                     }),
                 }
             }
             let cell = area.index_raw_mut(p);
-            cell.0 = if wall && (door_closed.is_none() || cell.1 == 0) {
+            cell.0 = if wall && door_was_closed.is_none() {
                 Cell::Wall
             } else if cell.1 == 2 {
                 Cell::Vis { obj, npc }
+            } else if let Some(door_was_closed) = door_was_closed {
+                Cell::InvisDoor { closed: door_was_closed }
             } else if roof {
-                Cell::Invis(CellInvis::Roof)
-            } else if cell.1 == 0 {
-                Cell::Invis(CellInvis::None)
-            } else if let Some(door_closed) = door_closed {
-                Cell::Invis(CellInvis::Door { closed: door_closed })
+                Cell::Roof
             } else {
-                Cell::Invis(CellInvis::None)
+                Cell::None
             };
         }
     }
@@ -572,17 +614,12 @@ pub enum CellObj {
 }
 
 #[derive(Debug, Clone)]
-pub enum CellInvis {
+pub enum Cell {
     None,
     Roof,
-    Door { closed: bool },
-}
-
-#[derive(Debug, Clone)]
-pub enum Cell {
+    InvisDoor { closed: bool },
     Wall,
     Vis { obj: Option<CellObj>, npc: Option<CellNpc> },
-    Invis(CellInvis),
 }
 
 #[derive(Debug)]
