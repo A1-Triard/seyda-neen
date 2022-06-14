@@ -103,7 +103,7 @@ pub enum ObjData {
     Door(Door),
     Chest(Chest),
     Npc(Npc),
-    Wall,
+    Wall { outer: bool },
     Roof,
 }
 
@@ -113,7 +113,7 @@ impl ObjData {
             ObjData::Door(d) => ObjRt::Door { d, was_closed: true },
             ObjData::Chest(d) => ObjRt::Chest(d),
             ObjData::Npc(d) => ObjRt::Npc(d),
-            ObjData::Wall => ObjRt::Wall,
+            ObjData::Wall { outer } => ObjRt::Wall { outer },
             ObjData::Roof => ObjRt::Roof,
         }
     }
@@ -124,7 +124,7 @@ enum ObjRt {
     Door { d: Door, was_closed: bool },
     Chest(Chest),
     Npc(Npc),
-    Wall,
+    Wall { outer: bool },
     Roof,
 }
 
@@ -372,7 +372,7 @@ impl World {
         let mut door_closed = None;
         for (_, _, obj_rt) in self.objs(p) {
             match obj_rt {
-                ObjRt::Wall => wall = true,
+                ObjRt::Wall { .. } => wall = true,
                 ObjRt::Door { d: Door { locked, .. }, .. } => {
                     door_closed = Some(locked.is_some());
                     break;
@@ -427,7 +427,7 @@ impl World {
                 let mut door = None;
                 for (obj, _, obj_rt) in self.objs(to) {
                     match obj_rt {
-                        ObjRt::Wall => wall = true,
+                        ObjRt::Wall { .. } => wall = true,
                         ObjRt::Door { .. } => {
                             door = Some(obj);
                             break;
@@ -516,7 +516,7 @@ impl World {
                     }
                 }
             }
-            let mut wall = false;
+            let mut wall_outer = None;
             let mut door_was_closed = None;
             let mut roof = false;
             let mut obj = None;
@@ -524,9 +524,8 @@ impl World {
             for (_, group, obj_rt) in self.objs(p) {
                 match obj_rt {
                     ObjRt::Roof => if group != roof_group { roof = true; },
-                    ObjRt::Wall => wall = true,
+                    &ObjRt::Wall { outer } => wall_outer = Some(outer),
                     &ObjRt::Door { ref d, was_closed } => {
-                        wall = true;
                         door_was_closed = Some(was_closed);
                         obj = Some(CellObj::Door { locked: d.locked.map(|x| x.get() != 0) });
                     },
@@ -539,14 +538,19 @@ impl World {
                     }),
                 }
             }
-            area[p] = if wall && door_was_closed.is_none() {
+            let uncovered_wall = wall_outer.map_or(false, |wall_outer|
+                door_was_closed.is_none() && (!roof || wall_outer)
+            );
+            area[p] = if uncovered_wall {
                 Cell::Wall
             } else if is_visible {
                 Cell::Vis { obj, npc }
+            } else if roof && !wall_outer.unwrap_or(false) {
+                Cell::Roof
             } else if let Some(door_was_closed) = door_was_closed {
                 Cell::InvisDoor { closed: door_was_closed }
-            } else if roof {
-                Cell::Roof
+            } else if wall_outer.is_some() {
+                Cell::Wall
             } else {
                 Cell::None
             };

@@ -342,10 +342,10 @@ fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: 
     let roof_group = world.add_group();
     let door = tl.offset(door_offset(w, h, door));
     let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
-    world.add_obj(None, bounds.l_line(), ObjData::Wall);
-    world.add_obj(None, bounds.t_line(), ObjData::Wall);
-    world.add_obj(None, bounds.r_line(), ObjData::Wall);
-    world.add_obj(None, bounds.b_line(), ObjData::Wall);
+    world.add_obj(None, bounds.l_line(), ObjData::Wall { outer: true });
+    world.add_obj(None, bounds.t_line(), ObjData::Wall { outer: true });
+    world.add_obj(None, bounds.r_line(), ObjData::Wall { outer: true });
+    world.add_obj(None, bounds.b_line(), ObjData::Wall { outer: true });
     world.add_obj(Some(roof_group), bounds, ObjData::Roof);
     world.add_obj(None, Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
         locked: Some(locked),
