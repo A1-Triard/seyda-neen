@@ -329,12 +329,12 @@ macro_rules! nm {
 fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: u16, locked: NonMaxU8) {
     let door = tl.offset(door_offset(w, h, door));
     let bounds = Rect { tl, size: Vector { x: w.get() as u16 as i16, y: h.get() as u16 as i16 } };
-    world.add(bounds.l_line(), ObjData::Wall);
-    world.add(bounds.t_line(), ObjData::Wall);
-    world.add(bounds.r_line(), ObjData::Wall);
-    world.add(bounds.b_line(), ObjData::Wall);
-    world.add(Thickness::all(1).shrink_rect(bounds), ObjData::Roof);
-    world.add(Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
+    world.add_obj(None, bounds.l_line(), ObjData::Wall);
+    world.add_obj(None, bounds.t_line(), ObjData::Wall);
+    world.add_obj(None, bounds.r_line(), ObjData::Wall);
+    world.add_obj(None, bounds.b_line(), ObjData::Wall);
+    world.add_obj(None, Thickness::all(1).shrink_rect(bounds), ObjData::Roof);
+    world.add_obj(None, Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
         locked: Some(locked),
         key: 0
     }));
@@ -357,7 +357,7 @@ fn main(_: isize, _: *const *const u8) -> isize {
     add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14, nm!(0));
     add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2, nm!(1));
     add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
-    world.add(Rect { tl: Point { x: -4, y: 1 }, size: Vector { x: 1, y: 1 } }, ObjData::Chest(Chest {
+    world.add_obj(None, Rect { tl: Point { x: -4, y: 1 }, size: Vector { x: 1, y: 1 } }, ObjData::Chest(Chest {
         locked: nm!(0),
         key: 0,
     }));

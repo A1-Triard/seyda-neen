@@ -111,7 +111,8 @@ macro_attr! {
     #[derive(Debug, Component!)]
     struct ObjNode {
         data: ObjData,
-        bounds: Rect
+        bounds: Rect,
+        group: Option<Group>,
     }
 }
 
@@ -174,6 +175,19 @@ impl Sector {
     }
 }
 
+macro_attr! {
+    #[derive(Debug, Component!)]
+    struct GroupNode {
+        objs: Vec<Obj>,
+    }
+}
+
+macro_attr! {
+    #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+    #[derive(NewtypeComponentId!)]
+    pub struct Group(Id<GroupNode>);
+}
+
 #[derive(Debug)]
 pub struct World {
     rng: SmallRng,
@@ -181,6 +195,7 @@ pub struct World {
     objs: Arena<ObjNode>,
     sectors: Arena<Sector>,
     area: [Id<Sector>; 4],
+    groups: Arena<GroupNode>,
 }
 
 impl World {
@@ -189,6 +204,7 @@ impl World {
         let player = objs.insert(|id| (ObjNode {
             data: ObjData::Npc(player),
             bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: 1, y: 1 } },
+            group: None,
         }, Obj(id)));
         let mut sectors = Arena::new();
         let tl = sectors.insert(|id| (Sector {
@@ -219,7 +235,14 @@ impl World {
             ),
             data: Right(vec![player])
         }, id));
-        World { rng: SmallRng::from_entropy(), player, objs, sectors, area: [tr, tl, bl, br] }
+        World {
+            rng: SmallRng::from_entropy(),
+            player,
+            objs,
+            sectors,
+            area: [tr, tl, bl, br],
+            groups: Arena::new()
+        }
     }
 
     pub fn player(&self) -> Point {
@@ -252,17 +275,40 @@ impl World {
         }
     }
 
-    pub fn add(&mut self, bounds: Rect, data: ObjData) -> Obj {
+    pub fn add_obj(&mut self, group: Option<Group>, bounds: Rect, data: ObjData) -> Obj {
         let obj = self.objs.insert(|id|
-            (ObjNode { bounds, data }, Obj(id))
+            (ObjNode { bounds, data, group }, Obj(id))
         );
+        if let Some(group) = group {
+            self.groups[group.0].objs.push(obj);
+        }
         self.add_raw(bounds, obj);
         obj
     }
 
-    pub fn remove(&mut self, obj: Obj) {
-        let bounds = self.objs.remove(obj.0).bounds;
-        self.remove_raw(bounds, obj);
+    pub fn add_group(&mut self) -> Group {
+        self.groups.insert(|id|
+            (GroupNode { objs: Vec::new() }, Group(id))
+        )
+    }
+
+    pub fn remove_obj(&mut self, obj: Obj) {
+        let obj_node = self.objs.remove(obj.0);
+        if let Some(group) = obj_node.group {
+            let objs = &mut self.groups[group.0].objs;
+            let index = objs.iter().position(|&x| x == obj).unwrap();
+            objs.swap_remove(index);
+        }
+        self.remove_raw(obj_node.bounds, obj);
+    }
+
+    pub fn remove_group(&mut self, group: Group) {
+        let group_node = self.groups.remove(group.0);
+        for obj in group_node.objs {
+            let obj_node = self.objs.remove(obj.0);
+            debug_assert_eq!(obj_node.group, Some(group));
+            self.remove_raw(obj_node.bounds, obj);
+        }
     }
 
     fn sector(&self, p: Point) -> (Id<Sector>, &Vec<Obj>) {
@@ -326,7 +372,7 @@ impl World {
         }
         let mut npcs = self.objs.items().iter()
             .filter_map(|(id, obj)|
-                if let ObjNode { data: ObjData::Npc(npc), bounds } = obj {
+                if let ObjNode { data: ObjData::Npc(npc), bounds, .. } = obj {
                     let movement_order = i8::MAX.wrapping_sub(npc.movement_priority) as u8;
                     let movement_order = ((movement_order as u16) << 8) | (self.rng.gen::<u8>() as u16);
                     Some(NpcMove {
