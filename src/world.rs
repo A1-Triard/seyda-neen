@@ -497,7 +497,6 @@ impl World {
         }
         for p in area.bounds().points() {
             let is_visible = self.is_visible_from(player, p);
-            area.index_raw_mut(p).1 = is_visible;
             if is_visible {
                 let mut door = None;
                 for (obj, _, obj_rt) in self.objs(p) {
@@ -517,8 +516,6 @@ impl World {
                     }
                 }
             }
-        }
-        for p in area.bounds().points() {
             let mut wall = false;
             let mut door_was_closed = None;
             let mut roof = false;
@@ -542,10 +539,9 @@ impl World {
                     }),
                 }
             }
-            let cell = area.index_raw_mut(p);
-            cell.0 = if wall && door_was_closed.is_none() {
+            area[p] = if wall && door_was_closed.is_none() {
                 Cell::Wall
-            } else if cell.1 {
+            } else if is_visible {
                 Cell::Vis { obj, npc }
             } else if let Some(door_was_closed) = door_was_closed {
                 Cell::InvisDoor { closed: door_was_closed }
@@ -625,7 +621,7 @@ pub enum Cell {
 #[derive(Debug)]
 pub struct VisibleArea {
     bounds: Rect,
-    cells: Vec<(Cell, bool)>,
+    cells: Vec<Cell>,
 }
 
 impl VisibleArea {
@@ -635,7 +631,7 @@ impl VisibleArea {
 
     pub fn new(center: Point, visibility: i8) -> Self {
         let size = Self::size(visibility);
-        let cells = vec![(Cell::Wall, false); size as usize * size as usize];
+        let cells = vec![Cell::None; size as usize * size as usize];
         let size = Vector { x: size as u16 as i16, y: size as u16 as i16 };
         let center_margin = Thickness::align(Vector { x: 1, y: 1 }, size, HAlign::Center, VAlign::Center);
         let bounds = center_margin.expand_rect(Rect { tl: center, size: Vector { x: 1, y: 1 } });
@@ -643,32 +639,24 @@ impl VisibleArea {
     }
 
     pub fn bounds(&self) -> Rect { self.bounds }
-
-    fn index_raw(&self, index: Point) -> &(Cell, bool) {
-        assert!(self.bounds.contains(index));
-        let v = index.offset_from(self.bounds.tl);
-        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
-        &self.cells[i]
-    }
-
-    fn index_raw_mut(&mut self, index: Point) -> &mut (Cell, bool) {
-        assert!(self.bounds.contains(index));
-        let v = index.offset_from(self.bounds.tl);
-        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
-        &mut self.cells[i]
-    }
 }
 
 impl Index<Point> for VisibleArea {
     type Output = Cell;
 
     fn index(&self, index: Point) -> &Cell {
-        &self.index_raw(index).0
+        assert!(self.bounds.contains(index));
+        let v = index.offset_from(self.bounds.tl);
+        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
+        &self.cells[i]
     }
 }
 
 impl IndexMut<Point> for VisibleArea {
     fn index_mut(&mut self, index: Point) -> &mut Cell {
-        &mut self.index_raw_mut(index).0
+        assert!(self.bounds.contains(index));
+        let v = index.offset_from(self.bounds.tl);
+        let i = (v.y as u16 as usize) * (self.bounds.w() as u16 as usize) + v.x as u16 as usize;
+        &mut self.cells[i]
     }
 }
