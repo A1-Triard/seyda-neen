@@ -55,6 +55,7 @@ struct Game {
     windows: Arena<GameWindow>,
     visibility: i8,
     world: World,
+    close_doors: bool,
 }
 
 type WindowRender = fn(
@@ -97,6 +98,17 @@ fn render(
         port.fill(|port, p| port.out(p, Color::White, BG, Attr::empty(), " "));
     }
 }
+
+/*
+fn render_status(
+    tree: &WindowTree<Game>,
+    window: Id<GameWindow>,
+    port: &mut RenderPort,
+    game: &mut Game,
+) {
+    port.out(ZZ
+}
+*/
 
 fn neg_abs(n: i16) -> i16 {
     n.checked_abs().map_or(i16::MIN, |a| -a)
@@ -341,6 +353,8 @@ fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: 
     }));
 }
 
+mod imperial_office;
+
 #[start]
 fn main(_: isize, _: *const *const u8) -> isize {
     let screen = unsafe { tuifw_screen::init() }.unwrap();
@@ -357,7 +371,8 @@ fn main(_: isize, _: *const *const u8) -> isize {
     });
     add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14, nm!(0));
     add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2, nm!(1));
-    add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
+    //add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
+    imperial_office::add_imperial_office(&mut world);
     world.add_obj(None, Rect { tl: Point { x: -4, y: 1 }, size: Vector { x: 1, y: 1 } }, ObjData::Chest(Chest {
         locked: nm!(0),
         key: 0,
@@ -366,7 +381,8 @@ fn main(_: isize, _: *const *const u8) -> isize {
     let mut game = Game {
         windows: Arena::new(),
         visibility: 10,
-        world
+        world,
+        close_doors: false,
     };
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
     let map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
