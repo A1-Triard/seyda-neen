@@ -56,6 +56,7 @@ struct Game {
     visibility: i8,
     world: World,
     close_doors: bool,
+    force_show_roof: bool,
 }
 
 type WindowRender = fn(
@@ -99,16 +100,29 @@ fn render(
     }
 }
 
-/*
+fn switch_color(enabled: bool) -> Color {
+    if enabled { Color::Green } else { Color::White }
+}
+
 fn render_status(
-    tree: &WindowTree<Game>,
-    window: Id<GameWindow>,
+    _tree: &WindowTree<Game>,
+    _window: Id<GameWindow>,
     port: &mut RenderPort,
     game: &mut Game,
 ) {
-    port.out(ZZ
+    port.out(Point { x: 0, y: 0 }, switch_color(game.close_doors), BG, Attr::empty(), "Close Doors");
+    port.out(Point { x: 0, y: 1 }, switch_color(game.force_show_roof), BG, Attr::empty(), "Force Show Roof");
 }
-*/
+
+fn status_bounds(_game: &Game, visible_area_bounds: Rect) -> Rect {
+    let size = Vector { x: 15, y: 2 };
+    let outer_bounds = Thickness::new(0, 1, 4, 0).shrink_rect(Rect::from_tl_br(
+        Point { x: 0, y: visible_area_bounds.t() },
+        visible_area_bounds.bl()
+    ));
+    let margin = Thickness::align(size, outer_bounds.size, HAlign::Right, VAlign::Top);
+    margin.shrink_rect(outer_bounds)
+}
 
 fn neg_abs(n: i16) -> i16 {
     n.checked_abs().map_or(i16::MIN, |a| -a)
@@ -128,7 +142,7 @@ fn render_map(
 ) {
     let player = game.world.player();
     let mut visible_area = VisibleArea::new(player, game.visibility);
-    game.world.render(&mut visible_area);
+    game.world.render(&mut visible_area, game.force_show_roof);
     let bounds = game.windows[window].window.bounds(tree);
     let bounds = bounds.relative_to(bounds.tl);
     let center_margin = Thickness::align(Vector { x: 1, y: 1 }, bounds.size, HAlign::Center, VAlign::Center);
@@ -394,7 +408,6 @@ fn main(_: isize, _: *const *const u8) -> isize {
     });
     add_building(&mut world, Point { x: -5, y: 0 }, nz!(5), nz!(7), 14, nm!(0));
     add_building(&mut world, Point { x: 4, y: 1 }, nz!(5), nz!(7), 2, nm!(1));
-    //add_building(&mut world, Point { x: -2, y: 11 }, nz!(12), nz!(7), 28, nm!(0));
     imperial_office::add_imperial_office(&mut world);
     world.add_obj(None, Rect { tl: Point { x: -4, y: 1 }, size: Vector { x: 1, y: 1 } }, ObjData::Chest(Chest {
         locked: nm!(0),
@@ -406,15 +419,34 @@ fn main(_: isize, _: *const *const u8) -> isize {
         visibility: 10,
         world,
         close_doors: false,
+        force_show_roof: false,
     };
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
     let map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
+    let status_initial_bounds = status_bounds(&game, map_initial_bounds);
+    let status = GameWindow::new(&mut game, render_status, &mut windows, status_initial_bounds);
     loop {
         let event = loop {
             if let Some(event) = WindowTree::update(&mut windows, true, &mut game).unwrap() {
                 break event;
             }
         };
+        if let Event::Resize = event {
+            let map_bounds = map_bounds(&game, windows.screen_size());
+            let status_bounds = status_bounds(&game, map_bounds);
+            let map = game.windows[map].window;
+            let status = game.windows[status].window;
+            map.move_xy(&mut windows, map_bounds);
+            status.move_xy(&mut windows, status_bounds);
+        }
+        match event {
+            Event::Key(n, Key::Char('f')) if n.get() % 2 != 0 => {
+                game.force_show_roof = !game.force_show_roof;
+                game.windows[status].window.invalidate(&mut windows);
+                game.windows[map].window.invalidate(&mut windows);
+            },
+            _ => { }
+        }
         let movement = match event {
             Event::Key(_, Key::Escape) => break,
             Event::Key(n, Key::Right) => Some((n, Direction::E)),

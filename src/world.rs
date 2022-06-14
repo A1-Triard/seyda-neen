@@ -483,7 +483,7 @@ impl World {
         }
     }
 
-    pub fn render(&mut self, area: &mut VisibleArea) {
+    pub fn render(&mut self, area: &mut VisibleArea, force_show_roof: bool) {
         let player = self.player();
         let mut roof_group = None;
         for (_, group, obj_rt) in self.objs(player) {
@@ -539,13 +539,13 @@ impl World {
                 }
             }
             let uncovered_wall = wall_outer.map_or(false, |wall_outer|
-                door_was_closed.is_none() && (!roof || wall_outer || is_visible)
+                door_was_closed.is_none() && (!roof || ((wall_outer || is_visible) && !force_show_roof))
             );
             area[p] = if uncovered_wall {
                 Cell::Wall
-            } else if is_visible {
+            } else if is_visible && (!roof || !force_show_roof) {
                 Cell::Vis { obj, npc }
-            } else if roof && !wall_outer.unwrap_or(false) {
+            } else if roof && (!wall_outer.unwrap_or(false) || force_show_roof) {
                 Cell::Roof(if door_was_closed.is_some() {
                     CellRoof::Door
                 } else if wall_outer.is_some() {
