@@ -155,8 +155,8 @@ fn render_map(
             &Cell::Wall { outer } => render_wall(&visible_area, p, outer),
             Cell::Roof(_) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let ch = if matches!(r, Cell::Roof(_)) { "  " } else { " " };
-                (Color::Black, Attr::INTENSITY | Attr::REVERSE, ch)
+                let ch = if matches!(r, Cell::Roof(_)) { "██" } else { "█" };
+                (Color::Black, Attr::INTENSITY, ch)
             },
             Cell::None => (Color::White, Attr::empty(), "·"),
             Cell::Vis { obj: None, door: None } => (Color::White, Attr::INTENSITY, "∙"),
