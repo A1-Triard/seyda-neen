@@ -155,8 +155,8 @@ fn render_map(
             Cell::Wall => render_wall(&visible_area, p),
             Cell::Roof(_) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-                let ch = if matches!(r, Cell::Roof(_)) { "░░" } else { "░" };
-                (Color::White, Attr::empty(), ch)
+                let ch = if matches!(r, Cell::Roof(_)) { "  " } else { " " };
+                (Color::Black, Attr::INTENSITY | Attr::REVERSE, ch)
             },
             Cell::Vis { npc: Some(npc), .. } => {
                 if npc.player {
