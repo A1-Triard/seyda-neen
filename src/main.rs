@@ -184,65 +184,68 @@ fn render_map(
     }
 }
 
-fn is_wall(cell: &Cell) -> bool {
-    matches!(cell, Cell::Wall)
-}
-
-fn is_door(cell: &Cell) -> bool {
-    matches!(
-        cell,
-        Cell::InvisDoor { .. } | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
-    )
-}
-
-fn is_wall_under_roof(cell: &Cell) -> bool {
-    matches!(cell, Cell::Roof(CellRoof::Wall))
-}
-
-fn is_door_under_roof(cell: &Cell) -> bool {
-    matches!( cell, Cell::Roof(CellRoof::Door))
-}
-
 fn render_wall(
     visible_area: &VisibleArea,
     p: Point,
 ) -> (Color, Attr, &'static str) {
-    let r_cell = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-    let d_cell = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-    let l_cell = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-    let u_cell = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
-    let l = (is_wall(l_cell) || is_door(l_cell)) as u8;
-    let u = (is_wall(u_cell) || is_door(u_cell)) as u8;
-    let r = if is_wall(r_cell) {
-        2
-    } else if is_door(r_cell) {
-        1
-    } else {
-        0
-    };
-    let d = (is_wall(d_cell) || is_door(d_cell)) as u8;
-    let index = (r << 3) | (l << 2) | (u << 1) | d;
+
+    fn is_wall(cell: &Cell) -> u8 {
+        matches!(cell, Cell::Wall) as u8
+    }
+
+    fn is_door(cell: &Cell) -> u8 {
+        matches!(
+            cell,
+            Cell::InvisDoor { .. } | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
+        ) as u8
+    }
+
+    fn is_wall_x(cell: &Cell) -> u8 {
+        matches!(cell, Cell::Roof(CellRoof::Wall)) as u8
+    }
+
+    fn is_door_x(cell: &Cell) -> u8 {
+        matches!( cell, Cell::Roof(CellRoof::Door)) as u8
+    }
+
+    let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
+    let d = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
+    let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
+    let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
+    let index
+        = (is_wall(l) << 0) | (is_door(l) << 1) | (is_wall(u) << 2) | (is_door(u) << 3)
+        | (is_wall(r) << 4) | (is_door(r) << 5) | (is_wall(d) << 6) | (is_door(d) << 7)
+    ;
     let index = if index == 0 {
-        let l = (is_wall_under_roof(l_cell) || is_door_under_roof(l_cell)) as u8;
-        let u = (is_wall_under_roof(u_cell) || is_door_under_roof(u_cell)) as u8;
-        let r = if is_wall_under_roof(r_cell) {
-            2
-        } else if is_door_under_roof(r_cell) {
-            1
-        } else {
-            0
-        };
-        let d = (is_wall_under_roof(d_cell) || is_door_under_roof(d_cell)) as u8;
-        (r << 3) | (l << 2) | (u << 1) | d
+        (is_wall_x(l) << 0) | (is_door_x(l) << 1) | (is_wall_x(u) << 2) | (is_door_x(u) << 3) |
+        (is_wall_x(r) << 4) | (is_door_x(r) << 5) | (is_wall_x(d) << 6) | (is_door_x(d) << 7)
     } else {
         index
     };
-    let ch = [
-        "│", "┬", "┴", "│", "─", "┐", "┘", "┤",
-        "─", "┌", "└", "├", "─", "┬", "┴", "┼",
-        "──", "┌─", "└─", "├─", "──", "┬─", "┴─", "┼─",
-    ][index as usize];
-    (Color::White, Attr::empty(), ch)
+
+    const WALL: [&'static str; 256] = [
+        "│ ", "─ ", "┤ ", "┤ ", "┴ ", "┘ ", "┘ ", "┘ ",  "┴ ", "┘ ", "┘ ", "┘ ", "┴ ", "┘ ", "┘ ", "┘ ",
+        "──", "──", "──", "──", "└─", "┴─", "┴─", "┴─",  "└─", "──", "──", "──", "└─", "──", "──", "──",
+        "├ ", "─ ", "┼ ", "┼ ", "└ ", "┴ ", "┴ ", "┴ ",  "└ ", "─ ", "┴ ", "┴ ", "└ ", "─ ", "┴ ", "┴ ",
+        "├ ", "─ ", "┼ ", "┼ ", "└ ", "┴ ", "┴ ", "┴ ",  "└ ", "─ ", "┴ ", "┴ ", "└ ", "─ ", "┴ ", "┴ ",
+
+        "┬ ", "┐ ", "┐ ", "┐ ", "│ ", "┤ ", "┤ ", "┤ ",  "│ ", "┐ ", "┐ ", "┐ ", "│ ", "┐ ", "┐ ", "┐ ",
+        "┌─", "┬─", "┬─", "┬─", "├─", "┼─", "┼─", "┼─",  "┌─", "┬─", "┬─", "┬─", "┌─", "┬─", "┬─", "┬─",
+        "┌ ", "┬ ", "┬ ", "┬ ", "├ ", "┼ ", "┼ ", "┼ ",  "┌ ", "┬ ", "┬ ", "┬ ", "┌ ", "┬ ", "┬ ", "┬ ",
+        "┌ ", "┬ ", "┬ ", "┬ ", "├ ", "┼ ", "┼ ", "┼ ",  "┌ ", "┬ ", "┬ ", "┬ ", "┌ ", "┬ ", "┬ ", "┬ ",
+
+        "┬ ", "┐ ", "┐ ", "┐ ", "│ ", "┘ ", "┘ ", "┘ ",  "│ ", "─ ", "┤ ", "┤ ", "│ ", "─ ", "┤ ", "┤ ",
+        "┌─", "──", "──", "──", "└─", "┴─", "┴─", "┴─",  "──", "──", "──", "──", "──", "──", "──", "──",
+        "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
+        "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
+
+        "┬ ", "┐ ", "┐ ", "┐ ", "│ ", "┘ ", "┘ ", "┘ ",  "│ ", "─ ", "┤ ", "┤ ", "│ ", "─ ", "┤ ", "┤ ",
+        "┌─", "──", "──", "──", "└─", "┴─", "┴─", "┴─",  "──", "──", "──", "──", "──", "──", "──", "──",
+        "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
+        "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
+    ];
+
+    (Color::White, Attr::empty(), WALL[index as usize])
 }
 
 fn render_door(
