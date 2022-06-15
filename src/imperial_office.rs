@@ -32,7 +32,7 @@ fn door(x: i16, y: i16, world: &mut World) {
             size: Vector { x: 1, y: 1 }
         },
         ObjData::Door(Door {
-            locked: Some(unsafe { NonMaxU8::new_unchecked(0) }),
+            state: DoorState::Closed { locked: unsafe { NonMaxU8::new_unchecked(0) } },
             key: 0
         })
     );
@@ -51,21 +51,33 @@ fn roof(x_min: i16, x_max: i16, y_min: i16, y_max: i16, group: Group, world: &mu
 
 pub fn add_imperial_office(world: &mut World) {
     let roof_group = world.add_group();
-    h_wall(-2, 5, 12, true, world);
-    h_wall(-2, 5, 18, true, world);
-    v_wall(5, 13, 17, true, world);
-    door(3, 18, world);
-    v_wall(-2, 13, 13, true, world);
-    v_wall(-2, 15, 17, true, world);
-    door(-2, 14, world);
-    h_wall(-6, -5, 13, false, world);
-    h_wall(-4, -3, 13, true, world);
-    h_wall(-8, -3, 15, true, world);
-    v_wall(-4, 9, 13, true, world);
-    h_wall(-9, -4, 9, true, world);
-    v_wall(-9, 9, 15, true, world);
-    door(-7, 9, world);
-    roof(-2, 5, 12, 18, roof_group, world);
-    roof(-4, -3, 13, 15, roof_group, world);
-    roof(-9, -4, 9, 15, roof_group, world);
+    h_wall(-2, 5, 22, true, world);
+    h_wall(-2, 5, 28, true, world);
+    v_wall(5, 23, 27, true, world);
+    door(3, 28, world);
+    v_wall(-2, 23, 23, true, world);
+    v_wall(-2, 25, 27, true, world);
+    door(-2, 24, world);
+    h_wall(-6, -5, 23, false, world);
+    h_wall(-4, -3, 23, true, world);
+    h_wall(-8, -3, 25, true, world);
+    v_wall(-4, 19, 23, true, world);
+    h_wall(-9, -4, 19, true, world);
+    v_wall(-9, 19, 25, true, world);
+    door(-8, 19, world);
+    roof(-2, 5, 22, 28, roof_group, world);
+    roof(-4, -3, 23, 25, roof_group, world);
+    roof(-9, -4, 19, 25, roof_group, world);
+    h_wall(-11, -10, 20, true, world);
+    v_wall(-11, 14, 19, true, world);
+    h_wall(-10, -7, 14, true, world);
+    let counselor = world.add_group();
+    h_wall(-6, -1, 13, true, world);
+    h_wall(-6, -1, 17, true, world);
+    v_wall(-1, 14, 16, true, world);
+    v_wall(-6, 14, 16, true, world);
+    door(-6, 16, world);
+    v_wall(-5, 18, 18, true, world);
+    door(-1, 16, world);
+    roof(-6, -1, 13, 17, counselor, world);
 }

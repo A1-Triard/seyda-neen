@@ -86,9 +86,15 @@ pub struct Npc {
     pub movement_priority: i8,
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum DoorState<LockState> {
+    Opened,
+    Closed { locked: LockState }
+}
+
 #[derive(Debug)]
 pub struct Door {
-    pub locked: Option<NonMaxU8>,
+    pub state: DoorState<NonMaxU8>,
     pub key: u16,
 }
 
@@ -161,8 +167,9 @@ impl Sector {
         } else {
             return;
         };
-        let center_x = sector.bounds.l() + sector.bounds.w() / 2;
-        let center_y = sector.bounds.t() + sector.bounds.h() / 2;
+        let center_x = sector.bounds.l().wrapping_add((sector.bounds.w() as u16 / 2) as i16);
+        let center_y = sector.bounds.t().wrapping_add((sector.bounds.h() as u16 / 2) as i16);
+        debug_assert!(sector.bounds.contains(Point { x: center_x, y: center_y }));
         let subsectors = [
             Rect::from_tl_br(
                 Point { x: center_x, y: sector.bounds.t() },
@@ -174,13 +181,15 @@ impl Sector {
             ),
             Rect::from_tl_br(
                 Point { x: sector.bounds.l(), y: center_y },
-                Point { x: sector.bounds.l(), y: sector.bounds.b() }
+                Point { x: center_x, y: sector.bounds.b() }
             ),
             Rect::from_tl_br(
                 Point { x: center_x, y: center_y },
                 Point { x: sector.bounds.r(), y: sector.bounds.b() }
             )
-        ].map(|bounds| {
+        ];
+        debug_assert_eq!(subsectors.iter().map(|x| x.area()).sum::<u32>(), sector.bounds.area());
+        let subsectors = subsectors.map(|bounds| {
             let mut subsector_objs = Vec::new();
             for &obj in &sector_objs {
                 if !objs[obj.0].bounds.intersect(bounds).is_empty() {
@@ -373,8 +382,8 @@ impl World {
         for (_, _, obj_rt) in self.objs(p) {
             match obj_rt {
                 ObjRt::Wall { .. } => wall = true,
-                ObjRt::Door { d: Door { locked, .. }, .. } => {
-                    door_closed = Some(locked.is_some());
+                ObjRt::Door { d: Door { state, .. }, .. } => {
+                    door_closed = Some(matches!(state, DoorState::Closed { .. }));
                     break;
                 }
                 _ => { },
@@ -438,12 +447,11 @@ impl World {
                 let deny = if let Some(door) = door {
                     match &mut self.objs[door.0].data {
                         ObjRt::Door { d: door, .. } => {
-                            let open = if let Some(locked) = door.locked {
-                                Some(locked.get() == 0)
-                            } else {
-                                None
+                            let open = match door.state {
+                                DoorState::Closed { locked } => Some(locked.get() == 0),
+                                DoorState::Opened => None,
                             };
-                            if open.unwrap_or(false) { door.locked = None; }
+                            if open.unwrap_or(false) { door.state = DoorState::Opened; }
                             open.map_or(false, |x| !x)
                         },
                         _ => unreachable!(),
@@ -467,8 +475,10 @@ impl World {
                     if let Some(from_door) = from_door {
                         match &mut self.objs[from_door.0].data {
                             ObjRt::Door { d: door, .. } => {
-                                if door.locked.is_none() {
-                                    door.locked = Some(unsafe { NonMaxU8::new_unchecked(0) });
+                                if matches!(door.state, DoorState::Opened) {
+                                    door.state = DoorState::Closed {
+                                        locked: unsafe { NonMaxU8::new_unchecked(0) }
+                                    };
                                 }
                             },
                             _ => unreachable!(),
@@ -510,14 +520,14 @@ impl World {
                 }
                 if let Some(door) = door {
                     if let ObjRt::Door { d, was_closed } = &mut self.objs[door.0].data {
-                        *was_closed = d.locked.is_some();
+                        *was_closed = matches!(d.state, DoorState::Closed { .. });
                     } else {
                         unreachable!();
                     }
                 }
             }
             let mut wall_outer = None;
-            let mut door_was_closed = None;
+            let mut door_state_was_closed = None;
             let mut roof = false;
             let mut obj = None;
             let mut npc = None;
@@ -525,11 +535,17 @@ impl World {
                 match obj_rt {
                     ObjRt::Roof => if group != roof_group { roof = true; },
                     &ObjRt::Wall { outer } => wall_outer = Some(outer),
-                    &ObjRt::Door { ref d, was_closed } => {
-                        door_was_closed = Some(was_closed);
-                        obj = Some(CellObj::Door { locked: d.locked.map(|x| x.get() != 0) });
-                    },
-                    ObjRt::Chest(chest) => obj = Some(CellObj::Chest { locked: chest.locked.get() != 0 }),
+                    &ObjRt::Door { ref d, was_closed } => door_state_was_closed = Some((
+                        match d.state {
+                            DoorState::Opened => DoorState::Opened,
+                            DoorState::Closed { locked } =>
+                                DoorState::Closed { locked: locked.get() != 0 },
+                        },
+                        was_closed
+                    )),
+                    ObjRt::Chest(chest) => obj = Some(CellObj::Chest {
+                        locked: chest.locked.get() != 0
+                    }),
                     ObjRt::Npc(npc_rt) => npc = Some(CellNpc {
                         player: p == player,
                         race: npc_rt.race,
@@ -538,27 +554,26 @@ impl World {
                     }),
                 }
             }
-            let uncovered_wall = wall_outer.map_or(false, |wall_outer|
-                door_was_closed.is_none() && (!roof || ((wall_outer || is_visible) && !force_show_roof))
-            );
-            area[p] = if uncovered_wall {
-                Cell::Wall
-            } else if is_visible && (!roof || !force_show_roof) {
-                Cell::Vis { obj, npc }
-            } else if roof && (!wall_outer.unwrap_or(false) || force_show_roof) {
-                Cell::Roof(if door_was_closed.is_some() {
+            area[p] = if roof && (force_show_roof || (!is_visible && !wall_outer.unwrap_or(false))) {
+                Cell::Roof(if door_state_was_closed.is_some() {
                     CellRoof::Door
                 } else if wall_outer.is_some() {
                     CellRoof::Wall
                 } else {
                     CellRoof::None
                 })
-            } else if let Some(door_was_closed) = door_was_closed {
-                Cell::InvisDoor { closed: door_was_closed }
-            } else if wall_outer.is_some() {
-                Cell::Wall
+            } else if is_visible && (wall_outer.is_none() || door_state_was_closed.is_some()) {
+                let door = door_state_was_closed.map(|x| x.0);
+                let obj = npc.map(CellObj::Npc).or(obj);
+                Cell::Vis { obj, door }
             } else {
-                Cell::None
+                if let Some((_, door_was_closed)) = door_state_was_closed {
+                    Cell::InvisDoor { closed: door_was_closed }
+                } else if let Some(wall_outer) = wall_outer {
+                    Cell::Wall { outer: wall_outer }
+                } else {
+                    Cell::None
+                }
             };
         }
     }
@@ -615,8 +630,8 @@ pub struct CellNpc {
 
 #[derive(Debug, Clone)]
 pub enum CellObj {
-    Door { locked: Option<bool> },
     Chest { locked: bool },
+    Npc(CellNpc),
 }
 
 #[derive(Debug, Clone)]
@@ -629,8 +644,8 @@ pub enum Cell {
     None,
     Roof(CellRoof),
     InvisDoor { closed: bool },
-    Wall,
-    Vis { obj: Option<CellObj>, npc: Option<CellNpc> },
+    Wall { outer: bool },
+    Vis { obj: Option<CellObj>, door: Option<DoorState<bool>> },
 }
 
 #[derive(Debug)]

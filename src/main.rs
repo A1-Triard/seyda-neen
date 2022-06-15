@@ -152,28 +152,30 @@ fn render_map(
         if norm_x_2(v) + 1 > 2 * game.visibility as u32 { continue; }
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
         let (fg, attr, ch) = match &visible_area[p] {
-            Cell::Wall => render_wall(&visible_area, p),
+            &Cell::Wall { outer } => render_wall(&visible_area, p, outer),
             Cell::Roof(_) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
                 let ch = if matches!(r, Cell::Roof(_)) { "  " } else { " " };
                 (Color::Black, Attr::INTENSITY | Attr::REVERSE, ch)
             },
-            Cell::Vis { npc: Some(npc), .. } => {
+            Cell::None => (Color::White, Attr::empty(), "·"),
+            Cell::Vis { obj: None, door: None } => (Color::White, Attr::INTENSITY, "∙"),
+            Cell::Vis { obj: None, door: Some(door_state) } => {
+                let (locked, closed) = match door_state {
+                    DoorState::Opened => (false, false),
+                    &DoorState::Closed { locked } => (locked, true),
+                };
+                render_door(&visible_area, p, closed, Some(locked))
+            },
+            &Cell::InvisDoor { closed } =>
+                render_door(&visible_area, p, closed, None),
+            Cell::Vis { obj: Some(CellObj::Npc(npc)), .. } => {
                 if npc.player {
                     (Color::Blue, Attr::empty(), "@")
                 } else {
                     (Color::Green, Attr::empty(), "C")
                 }
             },
-            Cell::None => (Color::White, Attr::empty(), "·"),
-            Cell::Vis { obj: None, .. } => (Color::White, Attr::INTENSITY, "∙"),
-            Cell::Vis { obj: Some(CellObj::Door { locked }), .. } => {
-                let closed = locked.is_some();
-                let locked = locked.map_or(false, |x| x);
-                render_door(&visible_area, p, closed, Some(locked))
-            },
-            &Cell::InvisDoor { closed } =>
-                render_door(&visible_area, p, closed, None),
             Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
                 if *locked { Color::Red } else { Color::Green },
                 Attr::empty(),
@@ -187,25 +189,24 @@ fn render_map(
 fn render_wall(
     visible_area: &VisibleArea,
     p: Point,
+    outer: bool,
 ) -> (Color, Attr, &'static str) {
 
-    fn is_wall(cell: &Cell) -> u8 {
-        matches!(cell, Cell::Wall) as u8
+    fn is_wall(cell: &Cell, outer: bool) -> u8 {
+        (match cell {
+            Cell::Wall { .. } => true,
+            Cell::Roof(CellRoof::Wall) => !outer,
+            _ => false
+        }) as u8
     }
 
-    fn is_door(cell: &Cell) -> u8 {
-        matches!(
-            cell,
-            Cell::InvisDoor { .. } | Cell::Vis { obj: Some(CellObj::Door { .. }), .. }
-        ) as u8
-    }
-
-    fn is_wall_x(cell: &Cell) -> u8 {
-        matches!(cell, Cell::Roof(CellRoof::Wall)) as u8
-    }
-
-    fn is_door_x(cell: &Cell) -> u8 {
-        matches!( cell, Cell::Roof(CellRoof::Door)) as u8
+    fn is_door(cell: &Cell, outer: bool) -> u8 {
+        (match cell {
+            Cell::InvisDoor { .. } => true,
+            Cell::Vis { door: Some(_), .. } => true,
+            Cell::Roof(CellRoof::Door) => !outer,
+            _ => false
+        }) as u8
     }
 
     let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
@@ -213,16 +214,11 @@ fn render_wall(
     let l = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
     let u = &visible_area[Point { x: p.x, y: p.y.wrapping_sub(1) }];
     let index
-        = (is_wall(l) << 0) | (is_door(l) << 1) | (is_wall(u) << 2) | (is_door(u) << 3)
-        | (is_wall(r) << 4) | (is_door(r) << 5) | (is_wall(d) << 6) | (is_door(d) << 7)
+        = (is_wall(l, outer) << 0) | (is_door(l, outer) << 1)
+        | (is_wall(u, outer) << 2) | (is_door(u, outer) << 3)
+        | (is_wall(r, outer) << 4) | (is_door(r, outer) << 5)
+        | (is_wall(d, outer) << 6) | (is_door(d, outer) << 7)
     ;
-    let index = if index == 0 {
-        (is_wall_x(l) << 0) | (is_door_x(l) << 1) | (is_wall_x(u) << 2) | (is_door_x(u) << 3) |
-        (is_wall_x(r) << 4) | (is_door_x(r) << 5) | (is_wall_x(d) << 6) | (is_door_x(d) << 7)
-    } else {
-        index
-    };
-
     const WALL: [&'static str; 256] = [
         "│ ", "─ ", "┤ ", "┤ ", "┴ ", "┘ ", "┘ ", "┘ ",  "┴ ", "┘ ", "┘ ", "┘ ", "┴ ", "┘ ", "┘ ", "┘ ",
         "──", "──", "──", "──", "└─", "┴─", "┴─", "┴─",  "└─", "──", "──", "──", "└─", "──", "──", "──",
@@ -244,7 +240,6 @@ fn render_wall(
         "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
         "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
     ];
-
     (Color::White, Attr::empty(), WALL[index as usize])
 }
 
@@ -254,15 +249,23 @@ fn render_door(
     closed: bool,
     locked: Option<bool>
 ) -> (Color, Attr, &'static str) {
+
+    fn is_wall(cell: &Cell) -> bool {
+        matches!(cell
+            , Cell::Wall { .. }
+            | Cell::InvisDoor { .. }
+            | Cell::Vis { door: Some(_), .. }
+            | Cell::Roof(CellRoof::Wall)
+            | Cell::Roof(CellRoof::Door)
+        )
+    }
+
     let horizontal = !closed ^ {
-        let h1 = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
-        let h1 = matches!(h1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
+        let h1 = is_wall(&visible_area[Point { x: p.x.wrapping_add(1), y: p.y }]);
         if !h1 {
-            let v1 = &visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }];
-            let v1 = matches!(v1, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. });
+            let v1 = is_wall(&visible_area[Point { x: p.x, y: p.y.wrapping_add(1) }]);
             if !v1 {
-                let h2 = &visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }];
-                matches!(h2, Cell::Wall | Cell::Vis { obj: Some(CellObj::Door { .. }), .. })
+                is_wall(&visible_area[Point { x: p.x.wrapping_sub(1), y: p.y }])
             } else {
                 false
             }
@@ -388,7 +391,7 @@ fn add_building(world: &mut World, tl: Point, w: NonZeroU8, h: NonZeroU8, door: 
     world.add_obj(None, bounds.b_line(), ObjData::Wall { outer: true });
     world.add_obj(Some(roof_group), bounds, ObjData::Roof);
     world.add_obj(None, Rect { tl: door, size: Vector { x: 1, y: 1 } }, ObjData::Door(Door {
-        locked: Some(locked),
+        state: DoorState::Closed { locked },
         key: 0
     }));
 }
