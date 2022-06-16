@@ -256,21 +256,21 @@ impl World {
         let tr = sectors.insert(|id| (Sector {
             bounds: Rect::from_tl_br(
                 Point { x: 0, y: i16::MIN },
-                Point { x: i16::MAX, y: 0 }
+                Point { x: i16::MIN, y: 0 }
             ),
             data: Right(Vec::new())
         }, id));
         let bl = sectors.insert(|id| (Sector {
             bounds: Rect::from_tl_br(
                 Point { x: i16::MIN, y: 0 },
-                Point { x: 0, y: i16::MAX }
+                Point { x: 0, y: i16::MIN }
             ),
             data: Right(Vec::new())
         }, id));
         let br = sectors.insert(|id| (Sector {
             bounds: Rect::from_tl_br(
                 Point { x: 0, y: 0 },
-                Point { x: i16::MAX, y: i16::MAX }
+                Point { x: i16::MIN, y: i16::MIN }
             ),
             data: Right(vec![player])
         }, id));
