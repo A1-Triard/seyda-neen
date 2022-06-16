@@ -49,6 +49,8 @@ use tuifw_screen::{Key, Point, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
 
 const BG: Option<Color> = Some(Color::Black);
+const INFO: (Color, Attr) = (Color::Blue, Attr::empty());
+const PC: (Color, Attr, &'static str) = (Color::Blue, Attr::empty(), "@");
 
 #[derive(Debug)]
 struct Game {
@@ -114,13 +116,13 @@ fn render_status(
     port.out(Point { x: 0, y: 1 }, switch_color(game.force_show_roof), BG, Attr::empty(), "Force Show Roof");
 }
 
-fn status_bounds(_game: &Game, visible_area_bounds: Rect) -> Rect {
+fn status_bounds(_game: &Game, map_bounds: Rect, screen_size: Vector) -> Rect {
     let size = Vector { x: 15, y: 2 };
-    let outer_bounds = Thickness::new(0, 1, 4, 0).shrink_rect(Rect::from_tl_br(
-        Point { x: 0, y: visible_area_bounds.t() },
-        visible_area_bounds.bl()
+    let outer_bounds = Thickness::new(4, 1, 0, 0).shrink_rect(Rect::from_tl_br(
+        map_bounds.tr(),
+        Point { x: 0i16.wrapping_add(screen_size.x), y: map_bounds.b() }
     ));
-    let margin = Thickness::align(size, outer_bounds.size, HAlign::Right, VAlign::Top);
+    let margin = Thickness::align(size, outer_bounds.size, HAlign::Left, VAlign::Top);
     margin.shrink_rect(outer_bounds)
 }
 
@@ -171,7 +173,7 @@ fn render_map(
                 render_door(&visible_area, p, closed, None),
             Cell::Vis { obj: Some(CellObj::Npc(npc)), .. } => {
                 if npc.player {
-                    (Color::Blue, Attr::empty(), "@")
+                    PC
                 } else {
                     (Color::Green, Attr::empty(), "C")
                 }
@@ -181,8 +183,18 @@ fn render_map(
                 Attr::empty(),
                 "▬"
             ),
+            &Cell::Vis { obj: Some(CellObj::Herb(t)), .. } => render_herb(t),
         };
         port.out(v, fg, BG, attr, ch);
+    }
+    port.out(Point { x: 0, y: 0 }, INFO.0, BG, INFO.1, "y k u");
+    port.out(Point { x: 0, y: 1 }, INFO.0, BG, INFO.1, "h • l");
+    port.out(Point { x: 0, y: 2 }, INFO.0, BG, INFO.1, "b j n");
+}
+
+fn render_herb(t: Herb) -> (Color, Attr, &'static str) {
+    match t {
+        Herb::BanglersBane => (Color::Yellow, Attr::empty(), "b"),
     }
 }
 
@@ -288,7 +300,7 @@ fn map_bounds(game: &Game, screen_size: Vector) -> Rect {
             x: (2 * (visible_area_size as u16 - 1) + 1) as i16,
             y: visible_area_size as u16 as i16
         },
-        screen_size, HAlign::Center, VAlign::Center
+        screen_size, HAlign::Left, VAlign::Top
     );
     margin.shrink_rect(Rect { tl: Point { x: 0, y: 0 }, size: screen_size })
 }
@@ -419,6 +431,9 @@ fn main(_: isize, _: *const *const u8) -> isize {
         locked: nm!(0),
         key: 0,
     }));
+    world.add_obj(None, Rect { tl: Point { x: 0, y: 6 }, size: Vector { x: 1, y: 1 } },
+        ObjData::Herb(nz!(2), Herb::BanglersBane)
+    );
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
@@ -429,7 +444,7 @@ fn main(_: isize, _: *const *const u8) -> isize {
     };
     let map_initial_bounds = map_bounds(&game, windows.screen_size());
     let map = GameWindow::new(&mut game, render_map, &mut windows, map_initial_bounds);
-    let status_initial_bounds = status_bounds(&game, map_initial_bounds);
+    let status_initial_bounds = status_bounds(&game, map_initial_bounds, windows.screen_size());
     let status = GameWindow::new(&mut game, render_status, &mut windows, status_initial_bounds);
     loop {
         let event = loop {
@@ -439,12 +454,19 @@ fn main(_: isize, _: *const *const u8) -> isize {
         };
         if let Event::Resize = event {
             let map_bounds = map_bounds(&game, windows.screen_size());
-            let status_bounds = status_bounds(&game, map_bounds);
+            let status_bounds = status_bounds(&game, map_bounds, windows.screen_size());
             let map = game.windows[map].window;
             let status = game.windows[status].window;
             map.move_xy(&mut windows, map_bounds);
             status.move_xy(&mut windows, status_bounds);
         }
+        let event = match event {
+            Event::Key(n, Key::Right) => Event::Key(n, Key::Char('l')),
+            Event::Key(n, Key::Left) => Event::Key(n, Key::Char('h')),
+            Event::Key(n, Key::Up) => Event::Key(n, Key::Char('k')),
+            Event::Key(n, Key::Down) => Event::Key(n, Key::Char('j')),
+            e => e
+        };
         match event {
             Event::Key(n, Key::Char('f')) if n.get() % 2 != 0 => {
                 game.force_show_roof = !game.force_show_roof;
@@ -461,10 +483,14 @@ fn main(_: isize, _: *const *const u8) -> isize {
         }
         let movement = match event {
             Event::Key(_, Key::Escape) => break,
-            Event::Key(n, Key::Right) => Some((n, Direction::E)),
-            Event::Key(n, Key::Left) => Some((n, Direction::W)),
-            Event::Key(n, Key::Up) => Some((n, Direction::N)),
-            Event::Key(n, Key::Down) => Some((n, Direction::S)),
+            Event::Key(n, Key::Char('l')) => Some((n, Direction::E)),
+            Event::Key(n, Key::Char('h')) => Some((n, Direction::W)),
+            Event::Key(n, Key::Char('k')) => Some((n, Direction::N)),
+            Event::Key(n, Key::Char('j')) => Some((n, Direction::S)),
+            Event::Key(n, Key::Char('y')) => Some((n, Direction::NW)),
+            Event::Key(n, Key::Char('u')) => Some((n, Direction::NE)),
+            Event::Key(n, Key::Char('b')) => Some((n, Direction::SW)),
+            Event::Key(n, Key::Char('n')) => Some((n, Direction::SE)),
             _ => None,
         };
         if let Some((n, direction)) = movement {

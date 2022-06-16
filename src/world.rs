@@ -5,6 +5,7 @@ use components_arena::{Arena, Component, Id, NewtypeComponentId};
 use core::any::Any;
 use core::cmp::max;
 use core::mem::replace;
+use core::num::NonZeroU8;
 use core::ops::{Index, IndexMut};
 use educe::Educe;
 use either::{Either, Left, Right};
@@ -17,6 +18,11 @@ use tuifw_screen::{HAlign, VAlign, Point, Rect, Thickness, Vector};
 
 const SECTOR_OBJS_MAX: usize = 32;
 const SECTOR_AREA_MIN: u32 = 16;
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum Herb {
+    BanglersBane,
+}
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub enum Race {
@@ -107,6 +113,7 @@ pub struct Chest {
 #[derive(Debug)]
 pub enum ObjData {
     Door(Door),
+    Herb(NonZeroU8, Herb),
     Chest(Chest),
     Npc(Npc),
     Wall { outer: bool },
@@ -118,6 +125,7 @@ impl ObjData {
         match self {
             ObjData::Door(d) => ObjRt::Door { d, was_closed: true },
             ObjData::Chest(d) => ObjRt::Chest(d),
+            ObjData::Herb(n, t) => ObjRt::Herb(n, t),
             ObjData::Npc(d) => ObjRt::Npc(d),
             ObjData::Wall { outer } => ObjRt::Wall { outer },
             ObjData::Roof => ObjRt::Roof,
@@ -127,6 +135,7 @@ impl ObjData {
 
 #[derive(Debug)]
 enum ObjRt {
+    Herb(NonZeroU8, Herb),
     Door { d: Door, was_closed: bool },
     Chest(Chest),
     Npc(Npc),
@@ -546,6 +555,7 @@ impl World {
                     ObjRt::Chest(chest) => obj = Some(CellObj::Chest {
                         locked: chest.locked.get() != 0
                     }),
+                    &ObjRt::Herb(_, d) => obj = Some(CellObj::Herb(d)),
                     ObjRt::Npc(npc_rt) => npc = Some(CellNpc {
                         player: p == player,
                         race: npc_rt.race,
@@ -632,6 +642,7 @@ pub struct CellNpc {
 pub enum CellObj {
     Chest { locked: bool },
     Npc(CellNpc),
+    Herb(Herb),
 }
 
 #[derive(Debug, Clone)]
