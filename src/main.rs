@@ -184,6 +184,8 @@ fn render_map(
                 "▬"
             ),
             &Cell::Vis { obj: Some(CellObj::Herb(t)), .. } => render_herb(t),
+            &Cell::Vis { obj: Some(CellObj::Blade), .. } =>
+                (Color::Blue, Attr::empty(), "\\"),
         };
         port.out(v, fg, BG, attr, ch);
     }
@@ -434,10 +436,20 @@ fn main(_: isize, _: *const *const u8) -> isize {
     world.add_obj(None, Rect { tl: Point { x: 0, y: 6 }, size: Vector { x: 1, y: 1 } },
         ObjData::Herb(nz!(2), Herb::BanglersBane)
     );
+    world.add_obj(None, Rect { tl: Point { x: 2, y: 8 }, size: Vector { x: 1, y: 1 } },
+        ObjData::Blade(Blade {
+            design: BladeDesign {
+                ty: BladeType::Long,
+                origin: WeaponDesignOrigin::Imperial,
+            },
+            material: Metal::Ebony,
+            quality: Quality::Quality,
+        })
+    );
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {
         windows: Arena::new(),
-        visibility: 10,
+        visibility: 11,
         world,
         close_doors: false,
         force_show_roof: false,

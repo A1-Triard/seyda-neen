@@ -4,6 +4,7 @@ use alloc::vec::Vec;
 use components_arena::{Arena, Component, Id, NewtypeComponentId};
 use core::any::Any;
 use core::cmp::max;
+use core::fmt::{self, Display, Formatter};
 use core::mem::replace;
 use core::num::NonZeroU8;
 use core::ops::{Index, IndexMut};
@@ -18,6 +19,206 @@ use tuifw_screen::{HAlign, VAlign, Point, Rect, Thickness, Vector};
 
 const SECTOR_OBJS_MAX: usize = 32;
 const SECTOR_AREA_MIN: u32 = 16;
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum Language { En, Ru }
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum GrammarGender {
+    Male,
+    Female,
+    Neutral
+}
+
+#[derive(Debug, Clone)]
+pub enum MetalGrammar {
+    Ru { gender: GrammarGender },
+    En,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum Metal {
+    Steel,
+    Silver,
+    Glass,
+    Ebony,
+    Daedric,
+}
+
+impl Metal {
+    fn display(self, grammar: &MetalGrammar) -> &'static str {
+        match (self, grammar) {
+            (Metal::Steel, MetalGrammar::En) => "Steel",
+            (Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Стальной",
+            (Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Стальная",
+            (Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Стальное",
+            (Metal::Silver, MetalGrammar::En) => "Silver",
+            (Metal::Silver, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Серебряный",
+            (Metal::Silver, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Серебряная",
+            (Metal::Silver, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Серебряное",
+            (Metal::Glass, MetalGrammar::En) => "Glass",
+            (Metal::Glass, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Стеклянный",
+            (Metal::Glass, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Стеклянная",
+            (Metal::Glass, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Стеклянное",
+            (Metal::Ebony, MetalGrammar::En) => "Ebony",
+            (Metal::Ebony, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Эбонитовый",
+            (Metal::Ebony, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Эбонитовая",
+            (Metal::Ebony, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Эбонитовое",
+            (Metal::Daedric, MetalGrammar::En) => "Daedric",
+            (Metal::Daedric, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Даэдрический",
+            (Metal::Daedric, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Даэдрическая",
+            (Metal::Daedric, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Даэдрическое",
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum Quality {
+    Bargain,
+    Cheap,
+    Standard,
+    Quality,
+    Exclusive,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum WeaponDesignOrigin {
+    Elven,
+    Akaviri,
+    Dwarven,
+    Orcish,
+    Nordic,
+    Imperial,
+    Exotic,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum BladeType {
+    Dagger,
+    Short,
+    Long,
+    TwoHanded,
+}
+
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub struct BladeDesign {
+    pub origin: WeaponDesignOrigin,
+    pub ty: BladeType,
+}
+
+impl BladeDesign {
+    pub fn name(self, lang: Language) -> (MetalGrammar, &'static str) {
+        match lang {
+            Language::En => (
+                MetalGrammar::En,
+                match self {
+                    BladeDesign { ty: BladeType::Dagger, origin: WeaponDesignOrigin::Akaviri } =>
+                        "Tanto",
+                    BladeDesign { ty: BladeType::Dagger, .. } =>
+                        "Dagger",
+                    BladeDesign { ty: BladeType::Short, origin: WeaponDesignOrigin::Akaviri } =>
+                        "Wakizashi",
+                    BladeDesign { ty: BladeType::Short, .. } =>
+                        "Short Sword",
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Exotic } =>
+                        "Saber",
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Akaviri } =>
+                        "Katana",
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Orcish } |
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Nordic } |
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Imperial } =>
+                        "Broad Sword",
+                    BladeDesign { ty: BladeType::Long, .. } =>
+                        "Long Sword",
+                    BladeDesign { ty: BladeType::TwoHanded, origin: WeaponDesignOrigin::Akaviri } =>
+                        "Dai-katana",
+                    BladeDesign { ty: BladeType::TwoHanded, .. } =>
+                        "Claymore",
+                }
+            ),
+            Language::Ru => {
+                let (gender, name) = match self {
+                    BladeDesign { ty: BladeType::Dagger, origin: WeaponDesignOrigin::Akaviri } =>
+                        (GrammarGender::Neutral, "танто"),
+                    BladeDesign { ty: BladeType::Dagger, .. } =>
+                        (GrammarGender::Male, "кинжал"),
+                    BladeDesign { ty: BladeType::Short, origin: WeaponDesignOrigin::Akaviri } =>
+                        (GrammarGender::Neutral, "вакидзаси"),
+                    BladeDesign { ty: BladeType::Short, .. } =>
+                        (GrammarGender::Male, "короткий меч"),
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Exotic } =>
+                        (GrammarGender::Female, "сабля"),
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Akaviri } =>
+                        (GrammarGender::Female, "катана"),
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Orcish } |
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Nordic } |
+                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Imperial } =>
+                        (GrammarGender::Male, "палаш"),
+                    BladeDesign { ty: BladeType::Long, .. } =>
+                        (GrammarGender::Male, "длинный меч"),
+                    BladeDesign { ty: BladeType::TwoHanded, origin: WeaponDesignOrigin::Akaviri } =>
+                        (GrammarGender::Female, "дайкатана"),
+                    BladeDesign { ty: BladeType::TwoHanded, .. } =>
+                        (GrammarGender::Female, "клеймора"),
+                };
+                (MetalGrammar::Ru { gender }, name)
+            },
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Blade {
+    pub design: BladeDesign,
+    pub material: Metal,
+    pub quality: Quality,
+}
+
+struct BladeName<'a>(&'a Blade, Language);
+
+impl<'a> Display for BladeName<'a> {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        let (material_grammar, name) = self.0.design.name(self.1);
+        let material = self.0.material.display(&material_grammar);
+        write!(f, "{} {}", material, name)
+    }
+}
+
+impl Blade {
+    pub fn name(&self, lang: Language) -> impl Display + '_ {
+        BladeName(self, lang)
+    }
+}
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub enum Herb {
@@ -114,6 +315,7 @@ pub struct Chest {
 pub enum ObjData {
     Door(Door),
     Herb(NonZeroU8, Herb),
+    Blade(Blade),
     Chest(Chest),
     Npc(Npc),
     Wall { outer: bool },
@@ -126,6 +328,7 @@ impl ObjData {
             ObjData::Door(d) => ObjRt::Door { d, was_closed: true },
             ObjData::Chest(d) => ObjRt::Chest(d),
             ObjData::Herb(n, t) => ObjRt::Herb(n, t),
+            ObjData::Blade(d) => ObjRt::Blade(d),
             ObjData::Npc(d) => ObjRt::Npc(d),
             ObjData::Wall { outer } => ObjRt::Wall { outer },
             ObjData::Roof => ObjRt::Roof,
@@ -135,6 +338,7 @@ impl ObjData {
 
 #[derive(Debug)]
 enum ObjRt {
+    Blade(Blade),
     Herb(NonZeroU8, Herb),
     Door { d: Door, was_closed: bool },
     Chest(Chest),
@@ -555,6 +759,7 @@ impl World {
                     ObjRt::Chest(chest) => obj = Some(CellObj::Chest {
                         locked: chest.locked.get() != 0
                     }),
+                    ObjRt::Blade(_) => obj = Some(CellObj::Blade),
                     &ObjRt::Herb(_, d) => obj = Some(CellObj::Herb(d)),
                     ObjRt::Npc(npc_rt) => npc = Some(CellNpc {
                         player: p == player,
@@ -643,6 +848,7 @@ pub enum CellObj {
     Chest { locked: bool },
     Npc(CellNpc),
     Herb(Herb),
+    Blade,
 }
 
 #[derive(Debug, Clone)]
