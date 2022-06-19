@@ -38,6 +38,7 @@ pub enum MetalGrammar {
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub enum Metal {
+    Chitin,
     Steel,
     Silver,
     Glass,
@@ -46,8 +47,29 @@ pub enum Metal {
 }
 
 impl Metal {
-    fn display(self, low_quality: bool, grammar: &MetalGrammar) -> &'static str {
+    pub fn weight_x50(self) -> u8 {
+        match self {
+            Metal::Chitin => 25,
+            Metal::Steel => 50,
+            Metal::Silver => 40,
+            Metal::Glass => 30,
+            Metal::Ebony => 100,
+            Metal::Daedric => 150,
+        }
+    }
+
+    pub fn display(self, low_quality: bool, grammar: &MetalGrammar) -> &'static str {
         match (low_quality, self, grammar) {
+            (_, Metal::Chitin, MetalGrammar::En) => "Chitin",
+            (_, Metal::Chitin, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Хитиновый",
+            (_, Metal::Chitin, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Хитиновая",
+            (_, Metal::Chitin, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Хитиновое",
             (false, Metal::Steel, MetalGrammar::En) => "Steel",
             (false, Metal::Steel, MetalGrammar::Ru {
                 gender: GrammarGender::Male
@@ -120,7 +142,6 @@ pub enum WeaponDesignOrigin {
     Orcish,
     Nordic,
     Imperial,
-    Exotic,
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
@@ -138,6 +159,35 @@ pub struct BladeDesign {
 }
 
 impl BladeDesign {
+    pub fn weight_x2(self) -> u8 {
+        match self {
+            BladeDesign { origin: WeaponDesignOrigin::Elven, ty: BladeType::Dagger } => 6,
+            BladeDesign { origin: WeaponDesignOrigin::Akaviri, ty: BladeType::Dagger } => 8,
+            BladeDesign { origin: WeaponDesignOrigin::Dwarven, ty: BladeType::Dagger } => 6,
+            BladeDesign { origin: WeaponDesignOrigin::Orcish, ty: BladeType::Dagger } => 7,
+            BladeDesign { origin: WeaponDesignOrigin::Nordic, ty: BladeType::Dagger } => 8,
+            BladeDesign { origin: WeaponDesignOrigin::Imperial, ty: BladeType::Dagger } => 7,
+            BladeDesign { origin: WeaponDesignOrigin::Elven, ty: BladeType::Short } => 16,
+            BladeDesign { origin: WeaponDesignOrigin::Akaviri, ty: BladeType::Short } => 20,
+            BladeDesign { origin: WeaponDesignOrigin::Dwarven, ty: BladeType::Short } => 16,
+            BladeDesign { origin: WeaponDesignOrigin::Orcish, ty: BladeType::Short } => 18,
+            BladeDesign { origin: WeaponDesignOrigin::Nordic, ty: BladeType::Short } => 20,
+            BladeDesign { origin: WeaponDesignOrigin::Imperial, ty: BladeType::Short } => 18,
+            BladeDesign { origin: WeaponDesignOrigin::Elven, ty: BladeType::Long } => 40,
+            BladeDesign { origin: WeaponDesignOrigin::Akaviri, ty: BladeType::Long } => 36,
+            BladeDesign { origin: WeaponDesignOrigin::Dwarven, ty: BladeType::Long } => 40,
+            BladeDesign { origin: WeaponDesignOrigin::Orcish, ty: BladeType::Long } => 24,
+            BladeDesign { origin: WeaponDesignOrigin::Nordic, ty: BladeType::Long } => 36,
+            BladeDesign { origin: WeaponDesignOrigin::Imperial, ty: BladeType::Long } => 24,
+            BladeDesign { origin: WeaponDesignOrigin::Elven, ty: BladeType::TwoHanded } => 54,
+            BladeDesign { origin: WeaponDesignOrigin::Akaviri, ty: BladeType::TwoHanded } => 40,
+            BladeDesign { origin: WeaponDesignOrigin::Dwarven, ty: BladeType::TwoHanded } => 54,
+            BladeDesign { origin: WeaponDesignOrigin::Orcish, ty: BladeType::TwoHanded } => 30,
+            BladeDesign { origin: WeaponDesignOrigin::Nordic, ty: BladeType::TwoHanded } => 60,
+            BladeDesign { origin: WeaponDesignOrigin::Imperial, ty: BladeType::TwoHanded } => 36,
+        }
+    }
+
     pub fn name(self, lang: Language) -> (MetalGrammar, &'static str) {
         match lang {
             Language::En => (
@@ -151,8 +201,6 @@ impl BladeDesign {
                         "Wakizashi",
                     BladeDesign { ty: BladeType::Short, .. } =>
                         "Short Sword",
-                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Exotic } =>
-                        "Saber",
                     BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Akaviri } =>
                         "Katana",
                     BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Orcish } |
@@ -177,8 +225,6 @@ impl BladeDesign {
                         (GrammarGender::Male, "вакидзаси"),
                     BladeDesign { ty: BladeType::Short, .. } =>
                         (GrammarGender::Male, "короткий меч"),
-                    BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Exotic } =>
-                        (GrammarGender::Female, "сабля"),
                     BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Akaviri } =>
                         (GrammarGender::Female, "катана"),
                     BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Orcish } |
@@ -218,6 +264,10 @@ impl<'a> Display for BladeName<'a> {
 impl Blade {
     pub fn name(&self, lang: Language) -> impl Display + '_ {
         BladeName(self, lang)
+    }
+
+    pub fn weight_x100(&self) -> u16 {
+        self.design.weight_x2() as u16 * self.material.weight_x50() as u16
     }
 }
 
