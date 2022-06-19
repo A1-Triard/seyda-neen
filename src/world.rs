@@ -46,69 +46,70 @@ pub enum Metal {
 }
 
 impl Metal {
-    fn display(self, grammar: &MetalGrammar) -> &'static str {
-        match (self, grammar) {
-            (Metal::Steel, MetalGrammar::En) => "Steel",
-            (Metal::Steel, MetalGrammar::Ru {
+    fn display(self, low_quality: bool, grammar: &MetalGrammar) -> &'static str {
+        match (low_quality, self, grammar) {
+            (false, Metal::Steel, MetalGrammar::En) => "Steel",
+            (false, Metal::Steel, MetalGrammar::Ru {
                 gender: GrammarGender::Male
             }) => "Стальной",
-            (Metal::Steel, MetalGrammar::Ru {
+            (false, Metal::Steel, MetalGrammar::Ru {
                 gender: GrammarGender::Female
             }) => "Стальная",
-            (Metal::Steel, MetalGrammar::Ru {
+            (false, Metal::Steel, MetalGrammar::Ru {
                 gender: GrammarGender::Neutral
             }) => "Стальное",
-            (Metal::Silver, MetalGrammar::En) => "Silver",
-            (Metal::Silver, MetalGrammar::Ru {
+            (true, Metal::Steel, MetalGrammar::En) => "Iron",
+            (true, Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Male
+            }) => "Железный",
+            (true, Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Female
+            }) => "Железная",
+            (true, Metal::Steel, MetalGrammar::Ru {
+                gender: GrammarGender::Neutral
+            }) => "Железное",
+            (_, Metal::Silver, MetalGrammar::En) => "Silver",
+            (_, Metal::Silver, MetalGrammar::Ru {
                 gender: GrammarGender::Male
             }) => "Серебряный",
-            (Metal::Silver, MetalGrammar::Ru {
+            (_, Metal::Silver, MetalGrammar::Ru {
                 gender: GrammarGender::Female
             }) => "Серебряная",
-            (Metal::Silver, MetalGrammar::Ru {
+            (_, Metal::Silver, MetalGrammar::Ru {
                 gender: GrammarGender::Neutral
             }) => "Серебряное",
-            (Metal::Glass, MetalGrammar::En) => "Glass",
-            (Metal::Glass, MetalGrammar::Ru {
+            (_, Metal::Glass, MetalGrammar::En) => "Glass",
+            (_, Metal::Glass, MetalGrammar::Ru {
                 gender: GrammarGender::Male
             }) => "Стеклянный",
-            (Metal::Glass, MetalGrammar::Ru {
+            (_, Metal::Glass, MetalGrammar::Ru {
                 gender: GrammarGender::Female
             }) => "Стеклянная",
-            (Metal::Glass, MetalGrammar::Ru {
+            (_, Metal::Glass, MetalGrammar::Ru {
                 gender: GrammarGender::Neutral
             }) => "Стеклянное",
-            (Metal::Ebony, MetalGrammar::En) => "Ebony",
-            (Metal::Ebony, MetalGrammar::Ru {
+            (_, Metal::Ebony, MetalGrammar::En) => "Ebony",
+            (_, Metal::Ebony, MetalGrammar::Ru {
                 gender: GrammarGender::Male
             }) => "Эбонитовый",
-            (Metal::Ebony, MetalGrammar::Ru {
+            (_, Metal::Ebony, MetalGrammar::Ru {
                 gender: GrammarGender::Female
             }) => "Эбонитовая",
-            (Metal::Ebony, MetalGrammar::Ru {
+            (_, Metal::Ebony, MetalGrammar::Ru {
                 gender: GrammarGender::Neutral
             }) => "Эбонитовое",
-            (Metal::Daedric, MetalGrammar::En) => "Daedric",
-            (Metal::Daedric, MetalGrammar::Ru {
+            (_, Metal::Daedric, MetalGrammar::En) => "Daedric",
+            (_, Metal::Daedric, MetalGrammar::Ru {
                 gender: GrammarGender::Male
             }) => "Даэдрический",
-            (Metal::Daedric, MetalGrammar::Ru {
+            (_, Metal::Daedric, MetalGrammar::Ru {
                 gender: GrammarGender::Female
             }) => "Даэдрическая",
-            (Metal::Daedric, MetalGrammar::Ru {
+            (_, Metal::Daedric, MetalGrammar::Ru {
                 gender: GrammarGender::Neutral
             }) => "Даэдрическое",
         }
     }
-}
-
-#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-pub enum Quality {
-    Bargain,
-    Cheap,
-    Standard,
-    Quality,
-    Exclusive,
 }
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
@@ -169,11 +170,11 @@ impl BladeDesign {
             Language::Ru => {
                 let (gender, name) = match self {
                     BladeDesign { ty: BladeType::Dagger, origin: WeaponDesignOrigin::Akaviri } =>
-                        (GrammarGender::Neutral, "танто"),
+                        (GrammarGender::Male, "танто"),
                     BladeDesign { ty: BladeType::Dagger, .. } =>
                         (GrammarGender::Male, "кинжал"),
                     BladeDesign { ty: BladeType::Short, origin: WeaponDesignOrigin::Akaviri } =>
-                        (GrammarGender::Neutral, "вакидзаси"),
+                        (GrammarGender::Male, "вакидзаси"),
                     BladeDesign { ty: BladeType::Short, .. } =>
                         (GrammarGender::Male, "короткий меч"),
                     BladeDesign { ty: BladeType::Long, origin: WeaponDesignOrigin::Exotic } =>
@@ -201,7 +202,7 @@ impl BladeDesign {
 pub struct Blade {
     pub design: BladeDesign,
     pub material: Metal,
-    pub quality: Quality,
+    pub low_quality: bool,
 }
 
 struct BladeName<'a>(&'a Blade, Language);
@@ -209,7 +210,7 @@ struct BladeName<'a>(&'a Blade, Language);
 impl<'a> Display for BladeName<'a> {
     fn fmt(&self, f: &mut Formatter) -> fmt::Result {
         let (material_grammar, name) = self.0.design.name(self.1);
-        let material = self.0.material.display(&material_grammar);
+        let material = self.0.material.display(self.0.low_quality, &material_grammar);
         write!(f, "{} {}", material, name)
     }
 }

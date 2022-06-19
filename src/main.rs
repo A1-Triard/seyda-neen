@@ -443,7 +443,7 @@ fn main(_: isize, _: *const *const u8) -> isize {
                 origin: WeaponDesignOrigin::Imperial,
             },
             material: Metal::Ebony,
-            quality: Quality::Quality,
+            low_quality: false,
         })
     );
     let mut windows = WindowTree::new(screen, render);
