@@ -184,8 +184,10 @@ fn render_map(
                 "▬"
             ),
             &Cell::Vis { obj: Some(CellObj::Herb(t)), .. } => render_herb(t),
-            &Cell::Vis { obj: Some(CellObj::Blade), .. } =>
+            &Cell::Vis { obj: Some(CellObj::Item(Item::Blade(_))), .. } =>
                 (Color::Blue, Attr::empty(), "\\"),
+            &Cell::Vis { obj: Some(CellObj::Item(Item::Herb(t))), .. } => render_herb(t),
+            &Cell::Vis { obj: Some(CellObj::Item(Item::Raw(t))), .. } => render_raw(t),
         };
         port.out(v, fg, BG, attr, ch);
     }
@@ -196,7 +198,17 @@ fn render_map(
 
 fn render_herb(t: Herb) -> (Color, Attr, &'static str) {
     match t {
-        Herb::BanglersBane => (Color::Yellow, Attr::empty(), "b"),
+        Herb::BanglersBane => (Color::Green, Attr::empty(), "b"),
+    }
+}
+
+fn render_raw(t: Raw) -> (Color, Attr, &'static str) {
+    match t {
+        Raw::Iron => (Color::Yellow, Attr::empty(), "i"),
+        Raw::Silver => (Color::Yellow, Attr::empty(), "s"),
+        Raw::Glass => (Color::Yellow, Attr::empty(), "l"),
+        Raw::Ebony => (Color::Yellow, Attr::empty(), "e"),
+        Raw::Gold => (Color::Yellow, Attr::empty(), "g"),
     }
 }
 
@@ -437,14 +449,14 @@ fn main(_: isize, _: *const *const u8) -> isize {
         ObjData::Herb(nz!(2), Herb::BanglersBane)
     );
     world.add_obj(None, Rect { tl: Point { x: 2, y: 8 }, size: Vector { x: 1, y: 1 } },
-        ObjData::Blade(Blade {
+        ObjData::Item(Item::Blade(Blade {
             design: BladeDesign {
                 ty: BladeType::Long,
                 origin: WeaponDesignOrigin::Imperial,
             },
             material: Metal::Ebony,
             low_quality: false,
-        })
+        }))
     );
     let mut windows = WindowTree::new(screen, render);
     let mut game = Game {

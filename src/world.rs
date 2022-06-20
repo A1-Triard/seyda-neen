@@ -30,6 +30,15 @@ pub enum GrammarGender {
     Neutral
 }
 
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
+pub enum Raw {
+    Iron,
+    Silver,
+    Glass,
+    Ebony,
+    Gold,
+}
+
 #[derive(Debug, Clone)]
 pub enum MetalGrammar {
     Ru { gender: GrammarGender },
@@ -276,6 +285,13 @@ pub enum Herb {
     BanglersBane,
 }
 
+#[derive(Debug, Clone)]
+pub enum Item {
+    Herb(Herb),
+    Blade(Blade),
+    Raw(Raw),
+}
+
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub enum Race {
     Danmer,
@@ -366,7 +382,7 @@ pub struct Chest {
 pub enum ObjData {
     Door(Door),
     Herb(NonZeroU8, Herb),
-    Blade(Blade),
+    Item(Item),
     Chest(Chest),
     Npc(Npc),
     Wall { outer: bool },
@@ -378,8 +394,8 @@ impl ObjData {
         match self {
             ObjData::Door(d) => ObjRt::Door { d, was_closed: true },
             ObjData::Chest(d) => ObjRt::Chest(d),
-            ObjData::Herb(n, t) => ObjRt::Herb(n, t),
-            ObjData::Blade(d) => ObjRt::Blade(d),
+            ObjData::Herb(n, t) => ObjRt::Herb(n, t, n.get()),
+            ObjData::Item(d) => ObjRt::Item(d),
             ObjData::Npc(d) => ObjRt::Npc(d),
             ObjData::Wall { outer } => ObjRt::Wall { outer },
             ObjData::Roof => ObjRt::Roof,
@@ -389,8 +405,8 @@ impl ObjData {
 
 #[derive(Debug)]
 enum ObjRt {
-    Blade(Blade),
-    Herb(NonZeroU8, Herb),
+    Item(Item),
+    Herb(NonZeroU8, Herb, u8),
     Door { d: Door, was_closed: bool },
     Chest(Chest),
     Npc(Npc),
@@ -810,8 +826,9 @@ impl World {
                     ObjRt::Chest(chest) => obj = Some(CellObj::Chest {
                         locked: chest.locked.get() != 0
                     }),
-                    ObjRt::Blade(_) => obj = Some(CellObj::Blade),
-                    &ObjRt::Herb(_, d) => obj = Some(CellObj::Herb(d)),
+                    ObjRt::Item(d) => obj = Some(CellObj::Item(d.clone())),
+                    ObjRt::Herb(_, _, 0) => { },
+                    &ObjRt::Herb(_, d, _) => obj = Some(CellObj::Herb(d)),
                     ObjRt::Npc(npc_rt) => npc = Some(CellNpc {
                         player: p == player,
                         race: npc_rt.race,
@@ -899,7 +916,7 @@ pub enum CellObj {
     Chest { locked: bool },
     Npc(CellNpc),
     Herb(Herb),
-    Blade,
+    Item(Item),
 }
 
 #[derive(Debug, Clone)]
