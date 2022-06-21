@@ -205,7 +205,49 @@ impl<T> Space<T> {
         self.add_raw(plane, bounds, obj);
     }
 
+    pub fn plane(&self, obj: Obj<T>) -> i16 {
+        self.objs[obj.0].plane
+    }
+
+    pub fn bounds(&self, obj: Obj<T>) -> Rect {
+        self.objs[obj.0].bounds
+    }
+
+    pub fn data(&self, obj: Obj<T>) -> &T {
+        &self.objs[obj.0].data
+    }
+
+    pub fn data_mut(&mut self, obj: Obj<T>) -> &mut T {
+        &mut self.objs[obj.0].data
+    }
+
     pub fn objs(
+        &self,
+    ) -> impl Iterator<Item=(Obj<T>, &T)> + DoubleEndedIterator + FusedIterator {
+        self.objs.items().iter().map(|(id, obj)| (Obj(id), &obj.data))
+    }
+
+    pub fn objs_bounds(
+        &self,
+    ) -> impl Iterator<Item=(Obj<T>, &T, i16, Rect)> + DoubleEndedIterator + FusedIterator {
+        self.objs.items().iter().map(|(id, obj)| (Obj(id), &obj.data, obj.plane, obj.bounds))
+    }
+
+    pub fn objs_at(
+        &self,
+        plane: i16, p: Point
+    ) -> impl Iterator<Item=Obj<T>> + DoubleEndedIterator + FusedIterator + '_ {
+        self.objs_data_at(plane, p).map(|x| x.0)
+    }
+
+    pub fn data_at(
+        &self,
+        plane: i16, p: Point
+    ) -> impl Iterator<Item=&T> + DoubleEndedIterator + FusedIterator {
+        self.objs_data_at(plane, p).map(|x| x.1)
+    }
+
+    pub fn objs_data_at(
         &self,
         plane: i16, p: Point
     ) -> impl Iterator<Item=(Obj<T>, &T)> + DoubleEndedIterator + FusedIterator {

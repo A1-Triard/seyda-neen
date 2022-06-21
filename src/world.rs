@@ -5,20 +5,16 @@ use components_arena::{Arena, Component, Id, NewtypeComponentId};
 use core::any::Any;
 use core::cmp::max;
 use core::fmt::{self, Display, Formatter};
-use core::mem::replace;
 use core::num::NonZeroU8;
 use core::ops::{Index, IndexMut};
 use educe::Educe;
-use either::{Either, Left, Right};
 use enum_derive_2018::IterVariants;
 use macro_attr_2018::macro_attr;
 use nonmax::NonMaxU8;
 use rand::{Rng, SeedableRng};
 use rand::rngs::SmallRng;
 use tuifw_screen::{HAlign, VAlign, Point, Rect, Thickness, Vector};
-
-const SECTOR_OBJS_MAX: usize = 32;
-const SECTOR_AREA_MIN: u32 = 16;
+use crate::space::{self, Space};
 
 #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
 pub enum Language { En, Ru }
@@ -414,76 +410,13 @@ enum ObjRt {
     Roof,
 }
 
-macro_attr! {
-    #[derive(Debug, Component!)]
-    struct ObjNode {
-        data: ObjRt,
-        bounds: Rect,
-        group: Option<Group>,
-    }
+#[derive(Debug)]
+pub struct ObjNode {
+    data: ObjRt,
+    group: Option<Group>,
 }
 
-macro_attr! {
-    #[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Clone, Copy, Hash)]
-    #[derive(NewtypeComponentId!)]
-    pub struct Obj(Id<ObjNode>);
-}
-
-macro_attr! {
-    #[derive(Debug, Component!)]
-    struct Sector {
-        bounds: Rect,
-        data: Either<[Id<Sector>; 4], Vec<Obj>>,
-    }
-}
-
-impl Sector {
-    fn split_if_needed(this: Id<Self>, sectors: &mut Arena<Sector>, objs: &mut Arena<ObjNode>) {
-        let sector = &mut sectors[this];
-        if sector.bounds.area() <= SECTOR_AREA_MIN { return; }
-        let sector_objs = if let Right(objs) = sector.data.as_mut() {
-            if objs.len() < SECTOR_OBJS_MAX { return; }
-            replace(objs, Vec::new())
-        } else {
-            return;
-        };
-        let center_x = sector.bounds.l().wrapping_add((sector.bounds.w() as u16 / 2) as i16);
-        let center_y = sector.bounds.t().wrapping_add((sector.bounds.h() as u16 / 2) as i16);
-        debug_assert!(sector.bounds.contains(Point { x: center_x, y: center_y }));
-        let subsectors = [
-            Rect::from_tl_br(
-                Point { x: center_x, y: sector.bounds.t() },
-                Point { x: sector.bounds.r(), y: center_y }
-            ),
-            Rect::from_tl_br(
-                Point { x: sector.bounds.l(), y: sector.bounds.t() },
-                Point { x: center_x, y: center_y }
-            ),
-            Rect::from_tl_br(
-                Point { x: sector.bounds.l(), y: center_y },
-                Point { x: center_x, y: sector.bounds.b() }
-            ),
-            Rect::from_tl_br(
-                Point { x: center_x, y: center_y },
-                Point { x: sector.bounds.r(), y: sector.bounds.b() }
-            )
-        ];
-        debug_assert_eq!(subsectors.iter().map(|x| x.area()).sum::<u32>(), sector.bounds.area());
-        let subsectors = subsectors.map(|bounds| {
-            let mut subsector_objs = Vec::new();
-            for &obj in &sector_objs {
-                if !objs[obj.0].bounds.intersect(bounds).is_empty() {
-                    subsector_objs.push(obj);
-                }
-            }
-            sectors.insert(|id| (Sector { bounds, data: Right(subsector_objs) }, id))
-        });
-        sectors[this].data = Left(subsectors);
-        for subsector in subsectors {
-            Self::split_if_needed(subsector, sectors, objs);
-        }
-    }
-}
+pub type Obj = space::Obj<ObjNode>;
 
 macro_attr! {
     #[derive(Debug, Component!)]
@@ -502,97 +435,48 @@ macro_attr! {
 pub struct World {
     rng: SmallRng,
     player: Obj,
-    objs: Arena<ObjNode>,
-    sectors: Arena<Sector>,
-    area: [Id<Sector>; 4],
+    space: Space<ObjNode>,
     groups: Arena<GroupNode>,
 }
 
 impl World {
     pub fn new(player: Npc) -> Self {
-        let mut objs = Arena::new();
-        let player = objs.insert(|id| (ObjNode {
-            data: ObjRt::Npc(player),
-            bounds: Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: 1, y: 1 } },
-            group: None,
-        }, Obj(id)));
-        let mut sectors = Arena::new();
-        let tl = sectors.insert(|id| (Sector {
-            bounds: Rect::from_tl_br(
-                Point { x: i16::MIN, y: i16::MIN },
-                Point { x: 0, y: 0 }
-            ),
-            data: Right(Vec::new())
-        }, id));
-        let tr = sectors.insert(|id| (Sector {
-            bounds: Rect::from_tl_br(
-                Point { x: 0, y: i16::MIN },
-                Point { x: i16::MIN, y: 0 }
-            ),
-            data: Right(Vec::new())
-        }, id));
-        let bl = sectors.insert(|id| (Sector {
-            bounds: Rect::from_tl_br(
-                Point { x: i16::MIN, y: 0 },
-                Point { x: 0, y: i16::MIN }
-            ),
-            data: Right(Vec::new())
-        }, id));
-        let br = sectors.insert(|id| (Sector {
-            bounds: Rect::from_tl_br(
-                Point { x: 0, y: 0 },
-                Point { x: i16::MIN, y: i16::MIN }
-            ),
-            data: Right(vec![player])
-        }, id));
+        let mut space = Space::new();
+        let player = space.add(
+            0,
+            Rect { tl: Point { x: 0, y: 0 }, size: Vector { x: 1, y: 1 } },
+            ObjNode {
+                data: ObjRt::Npc(player),
+                group: None,
+            }
+        );
         World {
             rng: SmallRng::from_entropy(),
             player,
-            objs,
-            sectors,
-            area: [tr, tl, bl, br],
+            space,
             groups: Arena::new()
         }
     }
 
     pub fn player(&self) -> Point {
-        self.objs[self.player.0].bounds.tl
+        self.space.bounds(self.player).tl
     }
 
     pub fn player_data_mut<T: Any>(&mut self) -> &mut T {
-        match &mut self.objs[self.player.0].data {
+        match &mut self.space.data_mut(self.player).data {
             ObjRt::Npc(Npc { ai_data, .. }) => ai_data.downcast_mut().unwrap(),
             _ => unreachable!()
         }
     }
 
-    fn add_raw(&mut self, bounds: Rect, obj: Obj) {
-        for p in bounds.points() {
-            let (sector, sector_objs) = self.sector_mut(p);
-            if !sector_objs.iter().any(|&x| x == obj) {
-                sector_objs.push(obj);
-                Sector::split_if_needed(sector, &mut self.sectors, &mut self.objs);
-            }
-        }
-    }
-
-    fn remove_raw(&mut self, bounds: Rect, obj: Obj) {
-        for p in bounds.points() {
-            let (_, sector_objs) = self.sector_mut(p);
-            if let Some(index) = sector_objs.iter().position(|&x| x == obj) {
-                sector_objs.swap_remove(index);
-            }
-        }
-    }
-
     pub fn add_obj(&mut self, group: Option<Group>, bounds: Rect, data: ObjData) -> Obj {
-        let obj = self.objs.insert(|id|
-            (ObjNode { bounds, data: data.into_rt(), group }, Obj(id))
-        );
+        let obj = self.space.add(0, bounds, ObjNode {
+            data: data.into_rt(),
+            group
+        });
         if let Some(group) = group {
             self.groups[group.0].objs.push(obj);
         }
-        self.add_raw(bounds, obj);
         obj
     }
 
@@ -603,63 +487,26 @@ impl World {
     }
 
     pub fn remove_obj(&mut self, obj: Obj) {
-        let obj_node = self.objs.remove(obj.0);
-        if let Some(group) = obj_node.group {
+        let group = self.space.data(obj).group;
+        if let Some(group) = group {
             let objs = &mut self.groups[group.0].objs;
             let index = objs.iter().position(|&x| x == obj).unwrap();
             objs.swap_remove(index);
         }
-        self.remove_raw(obj_node.bounds, obj);
+        self.space.remove(obj);
     }
 
     pub fn remove_group(&mut self, group: Group) {
         let group_node = self.groups.remove(group.0);
         for obj in group_node.objs {
-            let obj_node = self.objs.remove(obj.0);
-            debug_assert_eq!(obj_node.group, Some(group));
-            self.remove_raw(obj_node.bounds, obj);
+            self.space.remove(obj);
         }
-    }
-
-    fn sector(&self, p: Point) -> (Id<Sector>, &Vec<Obj>) {
-        let mut subsectors = &self.area;
-        loop {
-            let &sector = subsectors.into_iter().find(|&&x| self.sectors[x].bounds.contains(p)).unwrap();
-            match self.sectors[sector].data.as_ref() {
-                Right(x) => break (sector, x),
-                Left(x) => subsectors = x
-            }
-        }
-    }
-
-    fn sector_mut(&mut self, p: Point) -> (Id<Sector>, &mut Vec<Obj>) {
-        let mut subsectors = self.area.clone();
-        let (id, obj) = loop {
-            let sector = subsectors.into_iter().find(|&x| self.sectors[x].bounds.contains(p)).unwrap();
-            match self.sectors[sector].data.as_mut() {
-                Right(x) => break (sector, x as *mut _),
-                Left(x) => subsectors = x.clone()
-            }
-        };
-        (id, unsafe { &mut *obj })
-    }
-
-    fn objs(&self, p: Point) -> impl Iterator<Item=(Obj, Option<Group>, &ObjRt)> {
-        self.sector(p).1.iter().filter_map(move |&obj| {
-            let obj_node = &self.objs[obj.0];
-            if obj_node.bounds.contains(p) {
-                let group = obj_node.group;
-                Some((obj, group, &obj_node.data))
-            } else {
-                None
-            }
-        })
     }
 
     fn is_barrier(&self, p: Point) -> bool {
         let mut wall = false;
         let mut door_closed = None;
-        for (_, _, obj_rt) in self.objs(p) {
+        for obj_rt in self.space.data_at(0, p).map(|x| &x.data) {
             match obj_rt {
                 ObjRt::Wall { .. } => wall = true,
                 ObjRt::Door { d: Door { state, .. }, .. } => {
@@ -681,13 +528,14 @@ impl World {
             wants_close_door: bool,
             movement_order: u16,
         }
-        let mut npcs = self.objs.items().iter()
-            .filter_map(|(id, obj)|
-                if let ObjNode { data: ObjRt::Npc(npc), bounds, .. } = obj {
+        let mut npcs = self.space.objs_bounds()
+            .filter_map(|(id, obj, plane, bounds)| {
+                debug_assert_eq!(plane, 0);
+                if let ObjNode { data: ObjRt::Npc(npc), .. } = obj {
                     let movement_order = i8::MAX.wrapping_sub(npc.movement_priority) as u8;
                     let movement_order = ((movement_order as u16) << 8) | (self.rng.gen::<u8>() as u16);
                     Some(NpcMove {
-                        id: Obj(id),
+                        id,
                         from: bounds.tl,
                         ai: npc.ai,
                         to: None,
@@ -697,10 +545,10 @@ impl World {
                 } else {
                     None
                 }
-            )
+            })
             .collect::<Vec<_>>();
         for npc in &mut npcs {
-            let ai_data = if let ObjRt::Npc(npc) = &mut self.objs[npc.id.0].data {
+            let ai_data = if let ObjRt::Npc(npc) = &mut self.space.data_mut(npc.id).data {
                 npc.ai_data.as_mut()
             } else {
                 unreachable!()
@@ -714,8 +562,8 @@ impl World {
             if let Some(to) = npc.to {
                 let mut wall = false;
                 let mut door = None;
-                for (obj, _, obj_rt) in self.objs(to) {
-                    match obj_rt {
+                for (obj, obj_node) in self.space.objs_data_at(0, to) {
+                    match obj_node.data {
                         ObjRt::Wall { .. } => wall = true,
                         ObjRt::Door { .. } => {
                             door = Some(obj);
@@ -725,7 +573,7 @@ impl World {
                     }
                 }
                 let deny = if let Some(door) = door {
-                    match &mut self.objs[door.0].data {
+                    match &mut self.space.data_mut(door).data {
                         ObjRt::Door { d: door, .. } => {
                             let open = match door.state {
                                 DoorState::Closed { locked } => Some(locked.get() == 0),
@@ -747,13 +595,13 @@ impl World {
         npcs.sort_by_key(|x| x.movement_order);
         for npc in npcs {
             if let Some(to) = npc.to {
-                if self.objs(to).any(|(_, _, x)| matches!(x, ObjRt::Npc(_))) { continue; }
+                if self.space.data_at(0, to).any(|x| matches!(x.data, ObjRt::Npc(_))) { continue; }
                 if npc.wants_close_door {
-                    let from_door = self.objs(npc.from)
-                        .find(|(_, _, x)| matches!(x, ObjRt::Door { .. }))
+                    let from_door = self.space.objs_data_at(0, npc.from)
+                        .find(|(_, x)| matches!(x.data, ObjRt::Door { .. }))
                         .map(|x| x.0);
                     if let Some(from_door) = from_door {
-                        match &mut self.objs[from_door.0].data {
+                        match &mut self.space.data_mut(from_door).data {
                             ObjRt::Door { d: door, .. } => {
                                 if matches!(door.state, DoorState::Opened) {
                                     door.state = DoorState::Closed {
@@ -765,10 +613,7 @@ impl World {
                         }
                     }
                 }
-                let new_bounds = Rect { tl: to, size: Vector { x: 1, y: 1 } };
-                let old_bounds = replace(&mut self.objs[npc.id.0].bounds, new_bounds);
-                self.remove_raw(old_bounds, npc.id);
-                self.add_raw(new_bounds, npc.id);
+                self.space.move_(npc.id, 0, Rect { tl: to, size: Vector { x: 1, y: 1 } });
             }
         }
     }
@@ -776,10 +621,10 @@ impl World {
     pub fn render(&mut self, area: &mut VisibleArea, force_show_roof: bool) {
         let player = self.player();
         let mut roof_group = None;
-        for (_, group, obj_rt) in self.objs(player) {
-            match obj_rt {
+        for obj_node in self.space.data_at(0, player) {
+            match obj_node.data {
                 ObjRt::Roof => {
-                    roof_group = group;
+                    roof_group = obj_node.group;
                     break;
                 },
                 _ => { },
@@ -789,8 +634,8 @@ impl World {
             let is_visible = self.is_visible_from(player, p);
             if is_visible {
                 let mut door = None;
-                for (obj, _, obj_rt) in self.objs(p) {
-                    match obj_rt {
+                for (obj, obj_node) in self.space.objs_data_at(0, p) {
+                    match &obj_node.data {
                         ObjRt::Door { .. } => {
                             door = Some(obj);
                             break;
@@ -799,7 +644,7 @@ impl World {
                     }
                 }
                 if let Some(door) = door {
-                    if let ObjRt::Door { d, was_closed } = &mut self.objs[door.0].data {
+                    if let ObjRt::Door { d, was_closed } = &mut self.space.data_mut(door).data {
                         *was_closed = matches!(d.state, DoorState::Closed { .. });
                     } else {
                         unreachable!();
@@ -811,9 +656,9 @@ impl World {
             let mut roof = false;
             let mut obj = None;
             let mut npc = None;
-            for (_, group, obj_rt) in self.objs(p) {
-                match obj_rt {
-                    ObjRt::Roof => if group != roof_group { roof = true; },
+            for obj_node in self.space.data_at(0, p) {
+                match &obj_node.data {
+                    ObjRt::Roof => if obj_node.group != roof_group { roof = true; },
                     &ObjRt::Wall { outer } => wall_outer = Some(outer),
                     &ObjRt::Door { ref d, was_closed } => door_state_was_closed = Some((
                         match d.state {
