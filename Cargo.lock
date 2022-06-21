@@ -145,6 +145,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "int-vec-2d"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a6f50593b281f4881342cfb6769d0ac5fa038d6815b6e9ec6de991b72de9000e"
+dependencies = [
+ "either",
+ "enum-derive-2018",
+ "macro-attr-2018",
+ "num-traits",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -274,6 +286,7 @@ dependencies = [
  "either",
  "enum-derive-2018",
  "exit-no-std",
+ "int-vec-2d",
  "macro-attr-2018",
  "nonmax",
  "panicking",

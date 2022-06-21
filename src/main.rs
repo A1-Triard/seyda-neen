@@ -1,10 +1,12 @@
 #![deny(warnings)]
 #![allow(dead_code)]
 
+#![feature(const_btree_new)]
 #![feature(default_alloc_error_handler)]
 #![feature(extern_types)]
 #![feature(lang_items)]
 #![feature(start)]
+#![feature(trait_alias)]
 #![windows_subsystem="console"]
 #![no_std]
 
@@ -14,24 +16,28 @@ extern { }
 
 extern crate alloc;
 
-use composable_allocators::{AsGlobal, System};
+mod no_std {
+    use composable_allocators::{AsGlobal, System};
 
-#[global_allocator]
-static ALLOCATOR: AsGlobal<System> = AsGlobal(System);
+    #[global_allocator]
+    static ALLOCATOR: AsGlobal<System> = AsGlobal(System);
 
-#[cfg(not(feature="debug"))]
-#[panic_handler]
-fn panic(_panic: &core::panic::PanicInfo) -> ! {
-    exit_no_std::exit(b'P')
+    #[cfg(not(feature="debug"))]
+    #[panic_handler]
+    fn panic(_panic: &core::panic::PanicInfo) -> ! {
+        exit_no_std::exit(b'P')
+    }
+
+    #[cfg(all(windows, target_env="gnu", not(feature="debug")))]
+    #[no_mangle]
+    extern fn rust_eh_register_frames () { }
+
+    #[cfg(all(windows, target_env="gnu", not(feature="debug")))]
+    #[no_mangle]
+    extern fn rust_eh_unregister_frames () { }
 }
 
-#[cfg(all(windows, target_env="gnu", not(feature="debug")))]
-#[no_mangle]
-extern fn rust_eh_register_frames () { }
-
-#[cfg(all(windows, target_env="gnu", not(feature="debug")))]
-#[no_mangle]
-extern fn rust_eh_unregister_frames () { }
+mod space;
 
 mod world;
 use world::*;
