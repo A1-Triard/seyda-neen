@@ -1,5 +1,6 @@
 #![deny(warnings)]
 #![allow(dead_code)]
+#![allow(unreachable_code)]
 
 #![feature(const_btree_new)]
 #![feature(default_alloc_error_handler)]

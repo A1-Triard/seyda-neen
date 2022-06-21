@@ -198,9 +198,9 @@ impl<T> Space<T> {
     }
 
     pub fn move_(&mut self, obj: Obj<T>, plane: i16, bounds: Rect) {
-        let obj_node = &self.objs[obj.0];
-        let old_plane = obj_node.plane;
-        let old_bounds = obj_node.bounds;
+        let obj_node = &mut self.objs[obj.0];
+        let old_plane = replace(&mut obj_node.plane, plane);
+        let old_bounds = replace(&mut obj_node.bounds, bounds);
         self.remove_raw(old_plane, old_bounds, obj);
         self.add_raw(plane, bounds, obj);
     }
