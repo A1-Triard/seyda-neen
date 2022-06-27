@@ -51,13 +51,13 @@ use core::num::NonZeroU8;
 use educe::Educe;
 use macro_attr_2018::macro_attr;
 use nonmax::NonMaxU8;
-use tuifw_screen::{self, HAlign, VAlign, Attr, Color, Event};
+use tuifw_screen::{self, HAlign, VAlign, Bg, Event, Fg};
 use tuifw_screen::{Key, Point, Rect, Thickness, Vector};
 use tuifw_window::{RenderPort, Window, WindowTree};
 
-const BG: Option<Color> = Some(Color::Black);
-const INFO: (Color, Attr) = (Color::Blue, Attr::empty());
-const PC: (Color, Attr, &'static str) = (Color::Blue, Attr::empty(), "@");
+const BG: Bg = Bg::Black;
+const INFO: Fg = Fg::Blue;
+const PC: (Fg, &'static str) = (Fg::Blue, "@");
 
 #[derive(Debug)]
 struct Game {
@@ -71,7 +71,7 @@ struct Game {
 type WindowRender = fn(
     tree: &WindowTree<Game>,
     id: Id<GameWindow>,
-    port: &mut RenderPort,
+    rp: &mut RenderPort,
     game: &mut Game,
 );
 
@@ -97,30 +97,30 @@ impl GameWindow {
 fn render(
     tree: &WindowTree<Game>,
     window: Option<Window>,
-    port: &mut RenderPort,
+    rp: &mut RenderPort,
     game: &mut Game,
 ) {
     if let Some(window) = window {
         let window = window.tag(tree).unwrap();
         let render = game.windows[window].render;
-        render(tree, window, port, game);
+        render(tree, window, rp, game);
     } else {
-        port.fill(|port, p| port.out(p, Color::White, BG, Attr::empty(), " "));
+        rp.fill(|rp, p| rp.out(p, Fg::Black, BG, " "));
     }
 }
 
-fn switch_color(enabled: bool) -> Color {
-    if enabled { Color::Green } else { Color::White }
+fn switch_color(enabled: bool) -> Fg {
+    if enabled { Fg::Green } else { Fg::LightGray }
 }
 
 fn render_status(
     _tree: &WindowTree<Game>,
     _window: Id<GameWindow>,
-    port: &mut RenderPort,
+    rp: &mut RenderPort,
     game: &mut Game,
 ) {
-    port.out(Point { x: 0, y: 0 }, switch_color(game.close_doors), BG, Attr::empty(), "Close Doors");
-    port.out(Point { x: 0, y: 1 }, switch_color(game.force_show_roof), BG, Attr::empty(), "Force Show Roof");
+    rp.out(Point { x: 0, y: 0 }, switch_color(game.close_doors), BG, "Close Doors");
+    rp.out(Point { x: 0, y: 1 }, switch_color(game.force_show_roof), BG, "Force Show Roof");
 }
 
 fn status_bounds(_game: &Game, map_bounds: Rect, screen_size: Vector) -> Rect {
@@ -146,7 +146,7 @@ fn norm_x_2(v: Vector) -> u32 {
 fn render_map(
     tree: &WindowTree<Game>,
     window: Id<GameWindow>,
-    port: &mut RenderPort,
+    rp: &mut RenderPort,
     game: &mut Game,
 ) {
     let player = game.world.player();
@@ -160,15 +160,15 @@ fn render_map(
         let v = p.offset_from(player);
         if norm_x_2(v) + 1 > 2 * game.visibility as u32 { continue; }
         let v = center.offset(Vector { x: 2 * v.x, y: v.y });
-        let (fg, attr, ch) = match &visible_area[p] {
+        let (fg, ch) = match &visible_area[p] {
             &Cell::Wall { outer } => render_wall(&visible_area, p, outer),
             Cell::Roof(_) => {
                 let r = &visible_area[Point { x: p.x.wrapping_add(1), y: p.y }];
                 let ch = if matches!(r, Cell::Roof(_)) { "██" } else { "█" };
-                (Color::Black, Attr::INTENSITY, ch)
+                (Fg::DarkGray, ch)
             },
-            Cell::None => (Color::White, Attr::empty(), "·"),
-            Cell::Vis { obj: None, door: None } => (Color::White, Attr::INTENSITY, "∙"),
+            Cell::None => (Fg::LightGray,  "·"),
+            Cell::Vis { obj: None, door: None } => (Fg::White, "∙"),
             Cell::Vis { obj: None, door: Some(door_state) } => {
                 let (locked, closed) = match door_state {
                     DoorState::Opened => (false, false),
@@ -182,40 +182,39 @@ fn render_map(
                 if npc.player {
                     PC
                 } else {
-                    (Color::Green, Attr::empty(), "C")
+                    (Fg::Green, "C")
                 }
             },
             Cell::Vis { obj: Some(CellObj::Chest { locked }), .. } => (
-                if *locked { Color::Red } else { Color::Green },
-                Attr::empty(),
+                if *locked { Fg::Red } else { Fg::Green },
                 "▬"
             ),
             &Cell::Vis { obj: Some(CellObj::Herb(t)), .. } => render_herb(t),
             &Cell::Vis { obj: Some(CellObj::Item(Item::Blade(_))), .. } =>
-                (Color::Blue, Attr::empty(), "\\"),
+                (Fg::Blue, "\\"),
             &Cell::Vis { obj: Some(CellObj::Item(Item::Herb(t))), .. } => render_herb(t),
             &Cell::Vis { obj: Some(CellObj::Item(Item::Raw(t))), .. } => render_raw(t),
         };
-        port.out(v, fg, BG, attr, ch);
+        rp.out(v, fg, BG, ch);
     }
-    port.out(Point { x: 0, y: 0 }, INFO.0, BG, INFO.1, "y k u");
-    port.out(Point { x: 0, y: 1 }, INFO.0, BG, INFO.1, "h • l");
-    port.out(Point { x: 0, y: 2 }, INFO.0, BG, INFO.1, "b j n");
+    rp.out(Point { x: 0, y: 0 }, INFO, BG, "y k u");
+    rp.out(Point { x: 0, y: 1 }, INFO, BG, "h • l");
+    rp.out(Point { x: 0, y: 2 }, INFO, BG, "b j n");
 }
 
-fn render_herb(t: Herb) -> (Color, Attr, &'static str) {
+fn render_herb(t: Herb) -> (Fg, &'static str) {
     match t {
-        Herb::BanglersBane => (Color::Green, Attr::empty(), "b"),
+        Herb::BanglersBane => (Fg::Green, "b"),
     }
 }
 
-fn render_raw(t: Raw) -> (Color, Attr, &'static str) {
+fn render_raw(t: Raw) -> (Fg, &'static str) {
     match t {
-        Raw::Iron => (Color::Yellow, Attr::empty(), "i"),
-        Raw::Silver => (Color::Yellow, Attr::empty(), "s"),
-        Raw::Glass => (Color::Yellow, Attr::empty(), "l"),
-        Raw::Ebony => (Color::Yellow, Attr::empty(), "e"),
-        Raw::Gold => (Color::Yellow, Attr::empty(), "g"),
+        Raw::Iron => (Fg::Yellow, "i"),
+        Raw::Silver => (Fg::Yellow, "s"),
+        Raw::Glass => (Fg::Yellow, "l"),
+        Raw::Ebony => (Fg::Yellow, "e"),
+        Raw::Gold => (Fg::Yellow, "g"),
     }
 }
 
@@ -223,7 +222,7 @@ fn render_wall(
     visible_area: &VisibleArea,
     p: Point,
     outer: bool,
-) -> (Color, Attr, &'static str) {
+) -> (Fg, &'static str) {
 
     fn is_wall(cell: &Cell, outer: bool) -> u8 {
         (match cell {
@@ -273,7 +272,7 @@ fn render_wall(
         "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
         "┌ ", "─ ", "┬ ", "┬ ", "└ ", "┴ ", "┴ ", "┴ ",  "├ ", "─ ", "┼ ", "┼ ", "├ ", "─ ", "┼ ", "┼ ",
     ];
-    (Color::White, Attr::empty(), WALL[index as usize])
+    (Fg::LightGray, WALL[index as usize])
 }
 
 fn render_door(
@@ -281,7 +280,7 @@ fn render_door(
     p: Point,
     closed: bool,
     locked: Option<bool>
-) -> (Color, Attr, &'static str) {
+) -> (Fg, &'static str) {
 
     fn is_wall(cell: &Cell) -> bool {
         matches!(cell
@@ -308,9 +307,9 @@ fn render_door(
     };
     let ch = if horizontal { "─" } else { "|" };
     match locked {
-        None => (Color::White, Attr::empty(), ch),
-        Some(false) => (Color::Green, Attr::empty(), ch),
-        Some(true) => (Color::Red, Attr::empty(), ch)
+        None => (Fg::LightGray, ch),
+        Some(false) => (Fg::Green, ch),
+        Some(true) => (Fg::Red, ch)
     }
 }
 
